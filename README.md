@@ -11,6 +11,9 @@ pelo relatório.
 
 Documento gerado: [relatorio/relatorio.pdf](relatorio/relatorio.pdf).
 
+Planejamento da equipe:
+[PLANO_TRABALHO.md](PLANO_TRABALHO.md).
+
 ## Estrutura do projeto
 
 ```text
