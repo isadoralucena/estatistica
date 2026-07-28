@@ -1,0 +1,11 @@
+project:
+  type: default
+  render:
+    - relatorio.qmd
+
+lang: pt-BR
+
+execute:
+  echo: false
+
+format: modeloufcg-pdf
