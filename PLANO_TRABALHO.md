@@ -191,48 +191,122 @@ Isadora confirma se a causa pode estar na preparação dos dados.
 
 ## Estratégia de trabalho em uma única branch
 
-Toda a equipe trabalhará apenas na branch `main`. Para reduzir conflitos, cada
-pessoa deve editar inicialmente somente o arquivo correspondente à sua seção:
+Toda a equipe trabalhará exclusivamente na branch `main` e utilizará apenas o arquivo oficial:
 
 ```text
-relatorio/secoes/
-├── 01_dados_isadora.qmd
-├── 02_modelagem_jennifer.qmd
-└── 03_diagnosticos_oscar.qmd
+relatorio/relatorio.qmd
 ```
 
-Regras de colaboração:
+Os arquivos separados por seção não serão utilizados durante o desenvolvimento. Todo o código, texto, tabelas, figuras, análises e interpretações deverão ser inseridos diretamente no relatório oficial.
 
-1. Antes de começar uma tarefa, executar `git pull` na branch `main`.
-2. Não editar o arquivo de seção atribuído a outra pessoa.
-3. Fazer commits pequenos e identificados, por exemplo:
-   - `dados: adiciona análise descritiva (Isadora)`;
-   - `modelo: adiciona validação K-Fold (Jennifer)`;
-   - `diagnostico: adiciona QQ Plot (Oscar)`.
-4. Avisar o grupo antes de editar arquivos compartilhados, como
-   `README.md`, `modeloUFCG.bib` e `orientacoes.tex`.
-5. Se outra pessoa tiver enviado alterações, executar `git pull --rebase`
-   antes de fazer o próximo `git push`.
-6. Isadora será responsável por integrar, na ordem Isadora → Jennifer →
-   Oscar, as três seções em `relatorio/relatorio.qmd`.
-7. Somente Isadora deve regenerar e enviar `relatorio/relatorio.pdf`, depois
-   que as alterações textuais estiverem integradas. Isso evita conflitos no
-   PDF, que é um arquivo binário.
-8. Jennifer e Oscar revisam o `.qmd` integrado antes da geração do PDF final.
+Para reduzir conflitos, cada integrante deverá editar somente a parte do documento correspondente à sua responsabilidade:
+
+### Regras de colaboração
+
+1. Antes de iniciar qualquer alteração, executar:
+
+   ```bash
+   git checkout main
+   git pull
+   ```
+
+2. Cada integrante deve localizar sua seção dentro de `relatorio/relatorio.qmd` e editar apenas essa parte.
+
+3. Não modificar o código, os textos ou os resultados pertencentes à seção de outro integrante sem comunicar previamente ao grupo.
+
+4. Como todas as partes utilizam o mesmo arquivo, apenas uma pessoa deve editar e enviar alterações por vez.
+
+5. Antes de começar a trabalhar, o integrante deve avisar ao grupo que está editando o relatório.
+
+6. Após concluir sua alteração, o integrante deve fazer o commit e o `push` antes que outra pessoa comece a editar.
+
+7. Os commits devem ser pequenos, objetivos e identificados, por exemplo:
+
+   * `dados: adiciona análise descritiva (Isadora)`;
+   * `modelo: adiciona validação K-Fold (Jennifer)`;
+   * `diagnostico: adiciona QQ Plot (Oscar)`.
+
+8. Antes de cada novo commit, executar:
+
+   ```bash
+   git pull --rebase
+   ```
+
+   Caso existam alterações remotas, elas deverão ser integradas e verificadas antes do `push`.
+
+9. A ordem das seções no relatório deve permanecer:
+
+   ```text
+   Isadora → Jennifer → Oscar
+   ```
+
+   Essa ordem também representa a dependência entre as etapas:
+
+   * a modelagem utiliza os dados preparados na primeira parte;
+   * os diagnósticos utilizam os modelos construídos na segunda parte.
+
+10. Os nomes dos objetos compartilhados devem permanecer estáveis. Caso seja necessário renomear uma variável, conjunto de dados ou modelo utilizado por outra seção, o grupo deve ser informado.
+
+11. Arquivos compartilhados, como `README.md`, `modeloUFCG.bib` e `orientacoes.tex`, somente devem ser modificados após comunicação ao grupo.
+
+12. O relatório deve ser renderizado frequentemente para identificar erros de execução, referências, tabelas ou figuras:
+
+```bash
+quarto render relatorio/relatorio.qmd
+```
+
+13. O PDF gerado não deve ser editado manualmente. Todas as correções devem ser feitas no arquivo `relatorio.qmd`.
+
+14. Apenas Isadora será responsável por enviar ao repositório a versão atualizada de:
+
+```text
+relatorio/relatorio.pdf
+```
+
+Isso evita conflitos no PDF, que é um arquivo binário.
+
+15. Antes da geração do PDF final, Jennifer e Oscar devem revisar o conteúdo completo do `relatorio.qmd`, verificando se suas análises estão corretamente integradas às demais etapas.
+
+### Fluxo de trabalho recomendado
+
+O trabalho deve seguir este fluxo:
+
+```text
+1. Executar git pull
+2. Avisar ao grupo que o relatório será editado
+3. Alterar somente a seção atribuída
+4. Renderizar o relatório completo
+5. Corrigir possíveis erros
+6. Fazer um commit pequeno e identificado
+7. Executar git pull --rebase
+8. Fazer git push
+9. Avisar ao próximo integrante que o arquivo está liberado
+```
 
 ## Critérios de conclusão
 
 O trabalho estará pronto quando:
 
-- todas as tabelas e figuras forem produzidas por código;
-- o dado original permanecer inalterado;
-- `Apps` estiver documentada como variável resposta;
-- o uso ou a exclusão de `Accept` e `Enroll` estiver justificado;
-- a escolha da escala de `Apps` e do modelo estiver justificada;
-- multicolinearidade e pressupostos forem avaliados;
-- o QQ Plot dos resíduos estiver apresentado e interpretado;
-- os modelos candidatos forem comparados por validação K-Fold reproduzível;
-- pontos influentes tiverem análise de sensibilidade;
-- intervalos de confiança e predição tiverem interpretação prática;
-- `quarto render relatorio/relatorio.qmd` executar sem erros;
-- `relatorio/relatorio.pdf` estiver atualizado e revisado pelos três.
+* todo o código e todo o texto estiverem presentes em `relatorio/relatorio.qmd`;
+* todas as tabelas e figuras forem produzidas por código;
+* o dado original permanecer inalterado;
+* `Apps` estiver documentada como variável resposta;
+* o uso ou a exclusão de `Accept` e `Enroll` estiver justificado;
+* a escolha da escala de `Apps` estiver justificada;
+* a escolha do modelo estiver justificada;
+* a multicolinearidade tiver sido avaliada;
+* os pressupostos dos modelos tiverem sido avaliados;
+* o QQ Plot dos resíduos estiver apresentado e interpretado;
+* os modelos candidatos tiverem sido comparados por validação K-Fold reproduzível;
+* os pontos influentes tiverem análise de sensibilidade;
+* os intervalos de confiança e de predição tiverem interpretação prática;
+* as partes de Isadora, Jennifer e Oscar estiverem integradas e conectadas;
+* os objetos criados em uma etapa estiverem disponíveis para as etapas seguintes;
+* o comando abaixo executar sem erros:
+
+  ```bash
+  quarto render relatorio/relatorio.qmd
+  ```
+
+* `relatorio/relatorio.pdf` estiver atualizado;
+* o arquivo `.qmd` e o PDF final tiverem sido revisados pelos três integrantes.

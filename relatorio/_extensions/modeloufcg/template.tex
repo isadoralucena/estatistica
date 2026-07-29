@@ -16,15 +16,28 @@
 \usepackage{fancyhdr}
 \usepackage{booktabs}
 \usepackage{longtable}
+\usepackage{etoolbox}
+\usepackage{needspace}
 \newcounter{none} % tabelas sem legenda numerada (usado pelo Quarto/crossref)
 \usepackage{array}
 \usepackage{calc}
+
+%% Usa uma unica familia serifada em todo o relatorio. A classe carrega
+%% Palatino como fonte romana; igualar \sfdefault a \rmdefault tambem cobre
+%% elementos internos da classe que originalmente solicitavam Helvetica.
+\renewcommand{\sfdefault}{\rmdefault}
 %% Fixa cada figura exatamente onde e gerada ([H]). Sem isso, floats podem
 %% "flutuar" livremente e, neste documento (muitas figuras grandes em
 %% sequencia), acabam se deslocando para muito longe do texto que os
 %% referencia -- inclusive interferindo na quebra de pagina de tabelas
 %% longtable vizinhas.
 \usepackage{float}
+\floatplacement{figure}{H}
+
+%% Evita que tabelas curtas comecem no fim da pagina e sejam interrompidas
+%% por figuras na pagina seguinte. Tabelas realmente longas continuam
+%% podendo quebrar normalmente entre paginas.
+\BeforeBeginEnvironment{longtable}{\Needspace{12\baselineskip}}
 
 %% A classe modeloUFCG.cls calcula largura/altura de texto e margens
 %% assumindo o formato de trim de um periodico (174mm x 247mm), mas o PDF
@@ -38,6 +51,16 @@
 \fancyhead[L]{}
 \fancyhead[C]{}
 \fancyhead[R]{}
+\fancyfoot[L]{}
+\fancyfoot[C]{\small\thepage}
+\fancyfoot[R]{}
+\hypersetup{
+  colorlinks=true,
+  citecolor=blue,
+  linkcolor=blue,
+  urlcolor=blue,
+  filecolor=blue
+}
 
 %% A classe usa \flushbottom, que estica os espacos em branco de cada pagina
 %% para preenche-la ate o final. Combinado com figuras fixas ([H]), isso cria
@@ -66,11 +89,52 @@ $endfor$
 \renewcommand{\thesection}{\arabic{section}}
 \renewcommand{\thesubsection}{\thesection.\arabic{subsection}}
 \renewcommand{\thesubsubsection}{\thesubsection.\arabic{subsubsection}}
+\setcounter{secnumdepth}{3}
+\setcounter{tocdepth}{3}
+\titleformat{\section}[hang]
+  {\normalfont\rmfamily\fontseries{m}\fontsize{16}{18}\selectfont}
+  {\thesection}{0.7em}{}
+\titleformat{\subsection}[hang]
+  {\normalfont\rmfamily\fontseries{m}\fontsize{14}{18}\selectfont}
+  {\thesubsection}{0.7em}{}
+\titleformat{\subsubsection}[hang]
+  {\normalfont\rmfamily\fontseries{m}\fontsize{12}{14}\selectfont}
+  {\thesubsubsection}{0.7em}{}
+\titlespacing*{\section}{0pt}{12pt plus 2pt minus 2pt}{6pt}
+\titlespacing*{\subsection}{0pt}{10pt plus 2pt minus 1pt}{6pt}
+\titlespacing*{\subsubsection}{0pt}{9pt plus 1pt minus 1pt}{6pt}
+\pretocmd{\subsubsection}{\par}{}{}
+\renewcommand{\contentsname}{Sumário}
 
-%%%% Cabecalho no estilo de artigo academico, substituindo a capa           %%%%
-%%%% original (logo + caixa de titulo) do template Royal Society.          %%%%
-%%%% A caixa de resumo estreita e trocada por um resumo de largura total,  %%%%
-%%%% exibido logo apos o titulo/autores, como em um artigo convencional.   %%%%
+%% Tipografia integralmente em Palatino: texto, titulos, legendas e tabelas.
+\renewcommand{\sectionfont}{%
+  \normalfont\rmfamily\fontseries{m}\fontsize{16}{18}\selectfont\color{black}}
+\renewcommand{\subsectionfont}{%
+  \normalfont\rmfamily\fontseries{m}\fontsize{14}{18}\selectfont\color{black}}
+\renewcommand{\subsubsectionfont}{%
+  \normalfont\rmfamily\fontseries{m}\fontsize{12}{14}\selectfont\color{black}}
+\renewcommand{\captionfont}{%
+  \normalfont\rmfamily\fontseries{m}\fontsize{8.5}{10}\selectfont}
+\renewcommand{\captionheadfont}{%
+  \normalfont\rmfamily\fontseries{b}\fontsize{8.5}{10}\selectfont}
+\renewcommand{\tablebodyfont}{%
+  \normalfont\rmfamily\fontseries{m}\fontsize{8.5}{11}\selectfont}
+\renewcommand{\tablenotefont}{%
+  \normalfont\rmfamily\fontseries{m}\fontsize{8.5}{11}\selectfont
+  \leftskip-\leftnoteskip\rightskip-\leftnoteskip plus1fill}
+
+%% Referencias com indice numerico explicito, coerente com as citacoes
+%% numericas empregadas ao longo do texto.
+\makeatletter
+\renewcommand{\@biblabel}[1]{[#1]}
+\patchcmd{\thebibliography}
+  {\@biblabel{\@arabic\c@enumiv.}}
+  {\@biblabel{\@arabic\c@enumiv}}
+  {}{}
+\makeatother
+
+%%%% Elementos pre-textuais no estilo de relatorio academico: capa formal, %%%%
+%%%% pagina de resumo e pagina de sumario.                                 %%%%
 %% Apos o \documentclass terminar de carregar, o LaTeX restaura o catcode de
 %% @ para "outro", entao qualquer referencia a comandos internos da classe
 %% (\@title, \@author, \if@subject@provided etc.) precisa ficar dentro de
@@ -85,61 +149,98 @@ $endfor$
   \vskip\belowcaptionskip}
 
 \renewenvironment{abstract}{%
-  \global\setbox\absbox\vbox\bgroup\par\abstractfont
-  \leftskip0pc\rightskip0pc\noindent\ignorespaces
+  \global\setbox\absbox\vbox\bgroup\par
+  \normalfont\rmfamily\fontsize{10}{14}\selectfont
+  \leftskip0pc\rightskip0pc\parindent0pt\noindent\ignorespaces
 }{\par\egroup}
+
+%% Guarda apenas o conteudo dos metadados; os rotulos e a formatacao sao
+%% aplicados explicitamente na pagina de resumo.
+\renewcommand\subject[1]{%
+  \global\@subject@providedtrue%
+  \gdef\@subject{#1}}
+\renewcommand\keywords[1]{%
+  \global\@keywords@providedtrue%
+  \gdef\@keywords{#1}}
 
 %% A classe modeloUFCG.cls define \@maketitle atraves de mecanismos internos
 %% (fila de duas colunas / bloco de revisao editorial) que absorvem qualquer
 %% redefinicao de \@maketitle sem executa-la. Para evitar essa maquinaria,
 %% \maketitle e redefinido diretamente aqui.
 \renewcommand\maketitle{%
-  \vspace*{-2.2cm}
-  \noindent\begin{minipage}[c]{2.2cm}
-    \includegraphics[width=2cm]{_extensions/modeloufcg/lea_logo_bw}
-  \end{minipage}%
-  \begin{minipage}[c]{\textwidth-2.2cm}
-    {\fontfamily{\sfdefault}\fontseries{b}\fontshape{n}\fontsize{12}{14}\selectfont
-      UNIVERSIDADE FEDERAL DE CAMPINA GRANDE\par}
-    $if(disciplina)$
-      {\fontfamily{\sfdefault}\fontseries{m}\fontshape{n}\fontsize{11}{13}\selectfont
-       Disciplina: $disciplina$%
-       $if(periodo)$ \quad---\quad Período: $periodo$$endif$\par}
-    $endif$
-    $if(professores)$
-      {\fontfamily{\sfdefault}\fontseries{m}\fontshape{n}\fontsize{11}{13}\selectfont
-       Professores: $for(professores)$$professores$$sep$; $endfor$\par}
-    $endif$
-  \end{minipage}
-  \vskip4pt
-  \rule{\textwidth}{.5pt}
-  \vskip8pt
+  \begin{titlepage}
+    \thispagestyle{empty}
+    \begin{center}\rmfamily
+      \includegraphics[width=3.3cm]{_extensions/modeloufcg/lea_logo_bw}\par
+      \vspace{0.7cm}
+      $if(instituicao)$
+        {\bfseries\fontsize{13}{16}\selectfont\MakeUppercase{$instituicao$}\par}
+      $endif$
+      $if(unidade)$
+        \vspace{0.15cm}
+        {\fontsize{11}{14}\selectfont $unidade$\par}
+      $endif$
+      $if(laboratorio)$
+        {\fontsize{11}{14}\selectfont $laboratorio$\par}
+      $endif$
+
+      \vspace{1.5cm}
+      {\fontsize{11}{15}\selectfont
+        $for(authors)$
+          $it.name.literal$$sep$\\[0.15cm]
+        $endfor$\par}
+
+      \vfill
+      {\bfseries\fontsize{17}{22}\selectfont\MakeUppercase{\@title}\par}
+      \vspace{1.2cm}
+      $if(disciplina)$
+        {\fontsize{11}{15}\selectfont
+          Relatório apresentado à disciplina de \textit{$disciplina$}%
+          $if(periodo)$, período $periodo$$endif$.\par}
+      $endif$
+      $if(professores)$
+        \vspace{0.8cm}
+        {\fontsize{11}{15}\selectfont
+          $for(professores)$
+            $professores$$sep$\\
+          $endfor$\par}
+      $endif$
+
+      \vfill
+      {\fontsize{11}{14}\selectfont
+        $if(cidade)$$cidade$\\$endif$
+        $if(ano)$$ano$$endif$\par}
+    \end{center}
+  \end{titlepage}
+
+  \clearpage
+  \thispagestyle{plain}
   \begin{center}
-    {\fontfamily{\sfdefault}\fontseries{m}\fontshape{n}\fontsize{16}{18}\selectfont\mathversion{bold}\@title\par}
-    \vskip6pt
-    {\authorfont\@author\par}
-    \vskip3pt
-    \ifx\@address\empty\else
-      {\addressfont\@address\par}
-    \fi
-    \vskip6pt
-    \rule{\textwidth}{.5pt}
+    {\rmfamily\fontseries{b}\Large RESUMO\par}
   \end{center}
-  \vskip8pt
+  \vspace{1.2cm}
   \ifvoid\absbox\else
-    {\fontfamily{\sfdefault}\fontseries{b}\fontshape{n}\fontsize{11}{13}\selectfont Resumo}\par
-    \vskip4pt
     \noindent\usebox\absbox\par
-    \vskip6pt
+    \vspace{0.8cm}
   \fi
   \if@subject@provided
-    {\subjectfont\@subject\par}
-    \vskip4pt
+    {\normalfont\rmfamily\fontsize{10}{14}\selectfont
+      \noindent{\bfseries Áreas temáticas: }\@subject\par}
+    \vspace{0.35cm}
   \fi
   \if@keywords@provided
-    {\keywordfont\@keywords\par}
+    {\normalfont\rmfamily\fontsize{10}{14}\selectfont
+      \noindent{\bfseries Palavras-chave: }\@keywords\par}
   \fi
-  \vskip10pt
+
+  \clearpage
+  \thispagestyle{plain}
+  \renewcommand{\contentsname}{Sumário}
+  \tableofcontents
+
+  \clearpage
+  \thispagestyle{plain}
+  \pagestyle{fancy}
 }
 
 \makeatother
@@ -150,8 +251,8 @@ $endfor$
 \title{$title$}
 
 \author{
-$for(author)$
-$author.name$$$^{$author.affiliation$}$$$sep$,
+$for(authors)$
+$it.name.literal$$sep$,
 $endfor$
 }
 
@@ -218,6 +319,8 @@ $if(acknowledgements)$
 $endif$
 
 $if(natbib)$
+\clearpage
+\addcontentsline{toc}{section}{Referências}
 \bibliographystyle{_extensions/modeloufcg/RS}
 \bibliography{$bibliography$}
 $endif$
