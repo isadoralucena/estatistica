@@ -41,10 +41,56 @@
 
 %% A classe modeloUFCG.cls calcula largura/altura de texto e margens
 %% assumindo o formato de trim de um periodico (174mm x 247mm), mas o PDF
-%% final e produzido em A4 (210mm x 297mm). Isso deixa sobras enormes nas
-%% margens. O pacote geometry forca margens A4 corretas, sobrepondo o
-%% calculo original da classe.
-\usepackage[a4paper, margin=2.5cm]{geometry}
+%% final e produzido em A4 (210mm x 297mm). O geometry sobrepoe esse
+%% calculo com a distribuicao usual de relatorios academicos brasileiros:
+%% margem de encadernacao e superior maiores que as margens externa e
+%% inferior.
+\usepackage[
+  a4paper,
+  left=3cm,
+  right=2cm,
+  top=3cm,
+  bottom=2cm,
+  headheight=14pt,
+  headsep=0.6cm,
+  footskip=1cm
+]{geometry}
+
+%% Escala tipografica propria para relatorio. A classe de origem foi criada
+%% para artigos de periodico e fixa o corpo em 9 pt; em pagina A4 esse corpo
+%% tambem reduz excessivamente o sumario. O corpo de 11 pt com entrelinha de
+%% 15 pt preserva uma boa densidade de informacao sem comprometer a leitura.
+\makeatletter
+\renewcommand\normalsize{%
+  \@setfontsize\normalsize{11pt}{15pt}%
+  \abovedisplayskip 9pt plus 3pt minus 4pt%
+  \abovedisplayshortskip 0pt plus 3pt%
+  \belowdisplayshortskip 6pt plus 3pt minus 3pt%
+  \belowdisplayskip 9pt plus 3pt minus 4pt%
+  \let\@listi\@listI}
+\renewcommand\small{%
+  \@setfontsize\small{10pt}{13pt}%
+  \abovedisplayskip 8pt plus 3pt minus 4pt%
+  \abovedisplayshortskip 0pt plus 2pt%
+  \belowdisplayshortskip 5pt plus 2pt minus 2pt%
+  \belowdisplayskip 8pt plus 3pt minus 4pt}
+\renewcommand\footnotesize{%
+  \@setfontsize\footnotesize{9pt}{11pt}%
+  \abovedisplayskip 6pt plus 2pt minus 3pt%
+  \abovedisplayshortskip 0pt plus 2pt%
+  \belowdisplayshortskip 4pt plus 2pt minus 2pt%
+  \belowdisplayskip 6pt plus 2pt minus 3pt}
+\renewcommand\scriptsize{\@setfontsize\scriptsize{8pt}{9.5pt}}
+\renewcommand\tiny{\@setfontsize\tiny{6pt}{7.5pt}}
+\renewcommand\large{\@setfontsize\large{12.5pt}{15pt}}
+\renewcommand\Large{\@setfontsize\Large{15pt}{18pt}}
+\renewcommand\LARGE{\@setfontsize\LARGE{17pt}{21pt}}
+\renewcommand\huge{\@setfontsize\huge{20pt}{24pt}}
+\renewcommand\Huge{\@setfontsize\Huge{24pt}{29pt}}
+\makeatother
+\normalsize
+\setlength{\parindent}{1.25cm}
+\setlength{\parskip}{0pt}
 
 \pagestyle{fancy}
 \renewcommand{\headrulewidth}{0pt}
@@ -56,10 +102,10 @@
 \fancyfoot[R]{}
 \hypersetup{
   colorlinks=true,
-  citecolor=blue,
-  linkcolor=blue,
-  urlcolor=blue,
-  filecolor=blue
+  citecolor=black,
+  linkcolor=black,
+  urlcolor=black,
+  filecolor=black
 }
 
 %% A classe usa \flushbottom, que estica os espacos em branco de cada pagina
@@ -92,36 +138,61 @@ $endfor$
 \setcounter{secnumdepth}{3}
 \setcounter{tocdepth}{3}
 \titleformat{\section}[hang]
-  {\normalfont\rmfamily\fontseries{m}\fontsize{16}{18}\selectfont}
+  {\normalfont\rmfamily\bfseries\fontsize{15}{18}\selectfont}
   {\thesection}{0.7em}{}
 \titleformat{\subsection}[hang]
-  {\normalfont\rmfamily\fontseries{m}\fontsize{14}{18}\selectfont}
+  {\normalfont\rmfamily\bfseries\fontsize{13}{16}\selectfont}
   {\thesubsection}{0.7em}{}
 \titleformat{\subsubsection}[hang]
-  {\normalfont\rmfamily\fontseries{m}\fontsize{12}{14}\selectfont}
+  {\normalfont\rmfamily\bfseries\fontsize{11.5}{14}\selectfont}
   {\thesubsubsection}{0.7em}{}
-\titlespacing*{\section}{0pt}{12pt plus 2pt minus 2pt}{6pt}
-\titlespacing*{\subsection}{0pt}{10pt plus 2pt minus 1pt}{6pt}
-\titlespacing*{\subsubsection}{0pt}{9pt plus 1pt minus 1pt}{6pt}
-\pretocmd{\subsubsection}{\par}{}{}
+\titlespacing*{\section}{0pt}{22pt plus 4pt minus 3pt}{9pt plus 1pt}
+\titlespacing*{\subsection}{0pt}{16pt plus 3pt minus 2pt}{7pt plus 1pt}
+\titlespacing*{\subsubsection}{0pt}{13pt plus 2pt minus 2pt}{5pt plus 1pt}
+\pretocmd{\section}{\Needspace{5\baselineskip}}{}{}
+\pretocmd{\subsection}{\Needspace{4\baselineskip}}{}{}
+\pretocmd{\subsubsection}{\Needspace{3\baselineskip}}{}{}
 \renewcommand{\contentsname}{Sumário}
 
 %% Tipografia integralmente em Palatino: texto, titulos, legendas e tabelas.
 \renewcommand{\sectionfont}{%
-  \normalfont\rmfamily\fontseries{m}\fontsize{16}{18}\selectfont\color{black}}
+  \normalfont\rmfamily\bfseries\fontsize{15}{18}\selectfont\color{black}}
 \renewcommand{\subsectionfont}{%
-  \normalfont\rmfamily\fontseries{m}\fontsize{14}{18}\selectfont\color{black}}
+  \normalfont\rmfamily\bfseries\fontsize{13}{16}\selectfont\color{black}}
 \renewcommand{\subsubsectionfont}{%
-  \normalfont\rmfamily\fontseries{m}\fontsize{12}{14}\selectfont\color{black}}
+  \normalfont\rmfamily\bfseries\fontsize{11.5}{14}\selectfont\color{black}}
 \renewcommand{\captionfont}{%
-  \normalfont\rmfamily\fontseries{m}\fontsize{8.5}{10}\selectfont}
+  \normalfont\rmfamily\fontseries{m}\fontsize{9.5}{12}\selectfont}
 \renewcommand{\captionheadfont}{%
-  \normalfont\rmfamily\fontseries{b}\fontsize{8.5}{10}\selectfont}
+  \normalfont\rmfamily\fontseries{b}\fontsize{9.5}{12}\selectfont}
 \renewcommand{\tablebodyfont}{%
-  \normalfont\rmfamily\fontseries{m}\fontsize{8.5}{11}\selectfont}
+  \normalfont\rmfamily\fontseries{m}\fontsize{9.5}{12}\selectfont}
 \renewcommand{\tablenotefont}{%
-  \normalfont\rmfamily\fontseries{m}\fontsize{8.5}{11}\selectfont
+  \normalfont\rmfamily\fontseries{m}\fontsize{9}{11.5}\selectfont
   \leftskip-\leftnoteskip\rightskip-\leftnoteskip plus1fill}
+\renewcommand{\bibfont}{%
+  \normalfont\rmfamily\fontseries{m}\fontsize{10}{13}\selectfont}
+
+%% O sumario recebe uma escala explicita, independente dos tamanhos herdados
+%% da classe. As entradas de secao acompanham o corpo do texto; os niveis
+%% seguintes diminuem gradualmente, com recuos e espacamentos proporcionais.
+\makeatletter
+\renewcommand{\@pnumwidth}{2.5em}
+\renewcommand{\@tocrmarg}{3em}
+\renewcommand*\l@section[2]{%
+  \ifnum\c@tocdepth>\z@
+    \addpenalty\@secpenalty
+    \addvspace{0.45em \@plus 0.15em}%
+    {\normalfont\rmfamily\bfseries\fontsize{11}{14}\selectfont
+      \@dottedtocline{1}{0em}{2.4em}{#1}{#2}}%
+  \fi}
+\renewcommand*\l@subsection[2]{%
+  {\normalfont\rmfamily\fontsize{10.5}{13.5}\selectfont
+    \@dottedtocline{2}{2.4em}{3.2em}{#1}{#2}}}
+\renewcommand*\l@subsubsection[2]{%
+  {\normalfont\rmfamily\fontsize{10}{13}\selectfont
+    \@dottedtocline{3}{5.6em}{3.8em}{#1}{#2}}}
+\makeatother
 
 %% Referencias com indice numerico explicito, coerente com as citacoes
 %% numericas empregadas ao longo do texto.
@@ -319,7 +390,6 @@ $if(acknowledgements)$
 $endif$
 
 $if(natbib)$
-\clearpage
 \addcontentsline{toc}{section}{Referências}
 \bibliographystyle{_extensions/modeloufcg/RS}
 \bibliography{$bibliography$}

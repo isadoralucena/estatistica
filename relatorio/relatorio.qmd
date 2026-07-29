@@ -1,5 +1,5 @@
 ---
-title: "Modelagem do Comprimento da Sépala em Flores do Gênero Iris"
+title: Modelagem do número de candidaturas em universidades dos Estados Unidos por Regressão Linear Múltipla
 instituicao: "Universidade Federal de Campina Grande"
 unidade: "Departamento de Ciência da Computação"
 disciplina: "Estatística Aplicada"
@@ -21,865 +21,499 @@ address:
 cidade: "Campina Grande -- PB"
 ano: "2026"
 abstract: |
-  Este trabalho aplica a metodologia de regressão linear múltipla ao clássico conjunto
-  de dados `iris`, coletado por Anderson e popularizado por Fisher, com o objetivo de
-  modelar o comprimento da sépala a partir das demais variáveis morfológicas e da
-  espécie da flor. Realizamos uma análise exploratória uni e bivariada, incluindo
-  correlações, box-plots e verificação de dados ausentes, e ajustamos um modelo inicial
-  com as variáveis explicativas contínuas disponíveis. Após identificar
-  multicolinearidade severa entre o comprimento e a largura da pétala, comparamos
-  modelos candidatos e selecionamos uma especificação mais parcimoniosa. Os
-  pressupostos foram avaliados por análise de resíduos, gráfico de envelope simulado e
-  identificação de pontos atípicos, de alavanca e influentes. Por fim, examinamos a
-  inclusão da espécie por variáveis dummy e apresentamos intervalos de confiança para
-  o valor médio esperado da resposta e intervalos de predição para novas observações,
+  Este trabalho aplica a metodologia de Regressão Linear Múltipla (MRLM) ao conjunto
+  de dados `college`, com o objetivo de modelar o número de candidaturas (`Apps`)
+  recebidas por instituições de ensino superior dos Estados Unidos a partir de
+  características institucionais, acadêmicas e financeiras. Inicialmente, foi
+  realizada uma análise exploratória univariada e bivariada, incluindo estatísticas
+  descritivas, visualizações gráficas, análise de correlação e verificação da
+  presença de dados ausentes. Em seguida, foi ajustado um modelo inicial contendo
+  todas as variáveis explicativas disponíveis, sendo investigada a presença de
+  multicolinearidade e comparadas especificações alternativas para seleção do
+  modelo final. Os pressupostos da regressão linear foram avaliados por meio da
+  análise dos resíduos, gráfico de envelope simulado e identificação de
+  observações atípicas, de alavanca e influentes. Por fim, foi analisada a
+  contribuição da variável categórica `Private` por meio de variáveis indicadoras
+  (dummies) e foram construídos intervalos de confiança para o valor médio
+  esperado da resposta e intervalos de predição para novas observações,
   acompanhados de suas interpretações práticas.
 subject-areas:
   - "estatística aplicada"
-  - "modelagem preditiva"
+  - "ciência de dados"
 keywords:
   - "regressão linear múltipla"
-  - "multicolinearidade"
+  - "análise exploratória"
   - "seleção de modelos"
+  - "multicolinearidade"
+  - "diagnóstico de resíduos"
   - "variáveis dummy"
 format: modeloufcg-pdf
 bibliography: modeloUFCG.bib
-include-after-body: orientacoes.tex
 jupyter: python3
+execute:
+  echo: false
+  warning: false
 ---
 
 ```{python}
 #| label: setup
 #| include: false
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
-from scipy import stats
 import matplotlib.pyplot as plt
-from matplotlib.patches import Ellipse, Rectangle
+import seaborn as sns
 import statsmodels.api as sm
-import statsmodels.formula.api as smf
-from statsmodels.stats.outliers_influence import variance_inflation_factor
-from statsmodels.stats.anova import anova_lm
-from statsmodels.nonparametric.smoothers_lowess import lowess
-from sklearn import datasets
 from IPython.display import Markdown
 
+sns.set_theme(style="whitegrid", context="paper")
 plt.rcParams.update({
     "figure.dpi": 300,
     "font.family": "serif",
     "font.serif": ["Palatino Linotype", "Book Antiqua", "DejaVu Serif"],
-    "font.size": 9,
-    "axes.titlesize": 10,
-    "axes.labelsize": 9,
+    "font.size": 9.5,
+    "axes.titlesize": 10.5,
+    "axes.labelsize": 9.5,
     "xtick.labelsize": 8.5,
     "ytick.labelsize": 8.5,
     "legend.fontsize": 8.5,
     "mathtext.fontset": "stix",
 })
 
-cores_especies = {
-    "setosa": "#F8766D",
-    "versicolor": "#00BA38",
-    "virginica": "#619CFF",
-}
-variaveis_morfologicas = [
-    "Sepal.Length", "Sepal.Width", "Petal.Length", "Petal.Width"
-]
-rotulos_variaveis = {
-    "Sepal.Length": "Sepal.Length",
-    "Sepal.Width": "Sepal.Width",
-    "Petal.Length": "Petal.Length",
-    "Petal.Width": "Petal.Width",
-}
+CORES_PRIVATE = {"No": "#4C78A8", "Yes": "#E45756"}
+ROTULOS_PRIVATE = {"No": "Pública", "Yes": "Privada"}
 
-def estilo_grade(ax):
-    ax.set_facecolor("#F2F2F2")
-    ax.grid(True, color="#D9D9D9", linewidth=0.7)
+CAMINHO_DADOS = Path("../data/raw/college.csv")
+dados_brutos = pd.read_csv(CAMINHO_DADOS)
+dados = dados_brutos.copy()
+dados.index = pd.RangeIndex(1, len(dados) + 1, name="Observação")
+dados["Private"] = pd.Categorical(dados["Private"], categories=["No", "Yes"])
+
+variavel_resposta = "Apps"
+preditores_numericos = [
+    coluna for coluna in dados.columns
+    if coluna not in [variavel_resposta, "Private"]
+]
+dados_modelo = dados.copy()
+dados_modelo["Private_Yes"] = (dados_modelo["Private"] == "Yes").astype(int)
+preditores_modelo_inicial = preditores_numericos + ["Private_Yes"]
+
+def numero_br(valor, casas=0):
+    if pd.isna(valor):
+        return ""
+    texto = f"{valor:,.{casas}f}"
+    return texto.replace(",", "X").replace(".", ",").replace("X", ".")
+
+def pvalor_br(valor):
+    return "< 0,001" if valor < 0.001 else numero_br(valor, 3)
+
+def tabela(df):
+    return Markdown(df.to_markdown(index=False))
+
+def estilo_eixo(ax):
+    ax.grid(True, color="#D9D9D9", linewidth=0.6)
     ax.set_axisbelow(True)
     for spine in ax.spines.values():
-        spine.set_color("#333333")
-        spine.set_linewidth(0.8)
+        spine.set_color("#555555")
+        spine.set_linewidth(0.7)
 
-def tabela(df, digitos=2):
-    return Markdown(df.round(digitos).fillna("").to_markdown(index=False))
-
-def tabela_coeficientes(modelo, digitos=4):
-    nomes_termos = {
-        "Intercept": "Intercepto",
-        "Q('Sepal.Length')": "Sepal.Length",
-        "Q('Sepal.Width')": "Sepal.Width",
-        "Q('Petal.Length')": "Petal.Length",
-        "Q('Petal.Width')": "Petal.Width",
-        "Species[T.versicolor]": "Espécie: versicolor",
-        "Species[T.virginica]": "Espécie: virginica",
-        "C(Species, Treatment(reference='virginica'))[T.setosa]": "Espécie: setosa",
-        "C(Species, Treatment(reference='virginica'))[T.versicolor]": "Espécie: versicolor",
-    }
-    nomes_colunas = {
-        "Coef.": "Estimativa",
-        "Std.Err.": "Erro padrão",
-        "t": "Estatística t",
-        "P>|t|": "p-valor",
-        "[0.025": "Limite inferior",
-        "0.975]": "Limite superior",
-    }
-    resultado = modelo.summary2().tables[1].reset_index()
-    resultado = resultado.rename(
-        columns={resultado.columns[0]: "Termo", **nomes_colunas}
-    )
-    resultado["Termo"] = resultado["Termo"].replace(nomes_termos)
-    return tabela(resultado, digitos=digitos)
-
-iris = datasets.load_iris(as_frame=True).frame
-especie = pd.Categorical.from_codes(
-    iris["target"], categories=["setosa", "versicolor", "virginica"]
-)
-dados = iris.drop(columns="target").rename(columns={
-    "sepal length (cm)": "Sepal.Length",
-    "sepal width (cm)": "Sepal.Width",
-    "petal length (cm)": "Petal.Length",
-    "petal width (cm)": "Petal.Width",
-})
-dados["Species"] = especie
-
-def vif_manual(exog_df):
-    X = sm.add_constant(exog_df)
-    return pd.Series(
-        [variance_inflation_factor(X.values, i) for i in range(1, X.shape[1])],
-        index=exog_df.columns,
-    )
-
-def envelope_normal(modelo, n_sim=100, seed=1):
-    rng = np.random.default_rng(seed)
-    n = int(modelo.nobs)
-    sigma = np.sqrt(modelo.mse_resid)
-    X = modelo.model.exog
-    ajustados = modelo.fittedvalues
-    sims = np.empty((n_sim, n))
-    for i in range(n_sim):
-        y_sim = ajustados + rng.normal(0, sigma, n)
-        sims[i] = np.sort(sm.OLS(y_sim, X).fit().get_influence().resid_studentized_internal)
-    quantis = stats.norm.ppf((np.arange(1, n + 1) - 0.5) / n)
-    obs = np.sort(modelo.get_influence().resid_studentized_internal)
-    return quantis, obs, np.percentile(sims, 2.5, axis=0), np.percentile(sims, 97.5, axis=0)
+rotulos_variaveis = {
+    "Apps": "Candidaturas",
+    "Accept": "Candidaturas aceitas",
+    "Enroll": "Novos matriculados",
+    "F.Undergrad": "Graduandos em tempo integral",
+    "Expend": "Gasto por aluno (US$)",
+}
 ```
 
 # Introdução
 
-A relação entre as dimensões florais e a espécie constitui um dos exemplos mais estudados de
-discriminação morfológica em Botânica, desde os trabalhos pioneiros de Anderson [@Anderson1935] e
-Fisher [@Fisher1936] com flores do gênero *Iris*. O conjunto de dados resultante reúne 150
-observações de três espécies (*setosa*, *versicolor* e *virginica*) e quatro medidas morfológicas:
-comprimento e largura da sépala, além de comprimento e largura da pétala.
+O número de candidaturas recebidas por uma instituição de ensino superior pode ser considerado um indicador de sua demanda e de sua atratividade entre potenciais estudantes. Esse volume pode estar associado a características como porte institucional, custos, perfil acadêmico dos ingressantes, qualificação do corpo docente e investimentos realizados pela universidade.
 
-Embora a literatura sobre esse conjunto de dados enfatize sobretudo problemas de classificação,
-ele também permite ilustrar um problema de regressão: a previsão de uma dimensão floral a partir
-das demais características morfológicas. Neste relatório, o comprimento da sépala
-(`Sepal.Length`) é tratado como variável resposta. A forte associação entre algumas medidas
-explicativas reproduz um desafio frequente em estudos aplicados e torna a base adequada para
-discutir multicolinearidade, seleção de modelos e inferência preditiva.
-
-Especificamente, descrevemos a base de dados e conduzimos uma análise exploratória uni e
-bivariada; ajustamos um modelo inicial com as variáveis contínuas disponíveis; selecionamos um
-modelo mais parcimonioso e sem multicolinearidade relevante; verificamos os pressupostos da
-regressão linear múltipla; avaliamos pontos atípicos, de alavanca e influentes; examinamos a
-inclusão da espécie como explicativa; e apresentamos intervalos de confiança e de predição para
-dois conjuntos hipotéticos de valores das variáveis explicativas.
+O objetivo deste estudo é investigar a associação entre essas características e o número de candidaturas recebidas por meio da Regressão Linear Múltipla (MRLM). Inicialmente, será ajustado um modelo contendo todas as variáveis explicativas disponíveis, que servirá de referência para as etapas posteriores de seleção, validação e diagnóstico [@Kutner2004].
 
 # Metodologia
 
-## Modelo de regressão linear múltipla
+O estudo utiliza dados secundários provenientes da base `College`, disponibilizada no pacote `ISLR` e compilada a partir de informações publicadas pelo *U.S. News & World Report* [@James2021]. A análise foi realizada com os registros originais da base, sem coleta direta ou alteração dos dados brutos.
 
-Seja $y_i$ o comprimento da sépala da $i$-ésima flor. O modelo inicial inclui como explicativas a
-largura da sépala (`Sepal.Width`), o comprimento da pétala (`Petal.Length`) e a largura da pétala
-(`Petal.Width`), sob as suposições usuais da regressão linear múltipla: erros de média nula,
-variância constante, independência e normalidade [@Kutner2004].
+# Descrição e qualidade dos dados
 
-A multicolinearidade foi avaliada pelo fator de inflação da variância (VIF), adotando-se valores
-superiores a 10 como indício de multicolinearidade severa [@Kutner2004]. A escolha do modelo
-selecionado considerou os critérios de informação AIC [@Akaike1974] e BIC [@Schwarz1978], testes F
-entre modelos aninhados e a necessidade de preservar uma interpretação estável dos coeficientes.
-
-## Diagnóstico do modelo
-
-A adequação do modelo selecionado foi avaliada por meio dos gráficos de resíduos versus valores
-ajustados, quantil-quantil, escala-localização e resíduos versus alavancagem, além de um gráfico de
-envelope simulado [@CookWeisberg1982]. As observações foram classificadas como atípicas quando
-apresentaram resíduo estudentizado em valor absoluto superior a 2, como pontos de alavanca quando
-$h_{ii}>2p/n$ e como influentes quando a distância de Cook excedeu $4/n$ [@Cook1977;
-@Kutner2004]. O impacto desses pontos foi examinado pelo reajuste do modelo após sua remoção.
-
-## Variáveis dummy e categoria de referência
-
-Como `Species` possui três níveis, sua inclusão no modelo requer duas variáveis indicadoras, com
-uma das espécies definida como categoria de referência. Essa parametrização permite comparar as
-espécies mantendo constantes as demais explicativas. Também verificamos que a troca da categoria
-de referência modifica a interpretação do intercepto e dos coeficientes das indicadoras, mas não
-altera os valores ajustados nem a qualidade global do modelo.
-
-## Inferência preditiva
-
-Para valores especificados das variáveis explicativas, distinguimos dois tipos de inferência
-[@Kutner2004]: o intervalo de confiança para o valor médio esperado da resposta, que estima a
-média de todas as flores com aquelas características, e o intervalo de predição para uma nova
-observação individual. O segundo é necessariamente mais amplo, pois incorpora tanto a incerteza
-sobre a média quanto a variabilidade natural de uma flor em torno dessa média.
-
-# Resultados
-
-## Descrição da base de dados
-
-Os dados foram obtidos de 150 flores, com 50 observações de cada espécie. A Tabela
--@tbl-descricao apresenta as cinco variáveis da base, seus significados e suas unidades de medida.
+A base reúne dados de 777 instituições de ensino superior dos Estados Unidos e contém 18 atributos. A resposta analisada é `Apps`, que corresponde ao número de candidaturas recebidas. Entre os preditores, `Private` é o único categórico e distingue universidades públicas (`No`) e privadas (`Yes`), totalizando 212 e 565 casos, respectivamente. Os demais atributos são numéricos e abrangem informações sobre admissão, quantidade de estudantes, custos, perfil acadêmico, corpo docente e investimentos. A @tbl-dicionario apresenta a descrição e a unidade de cada campo.
 
 ```{python}
-#| label: tbl-descricao
-#| tbl-cap: "Variáveis da base de dados iris."
-#| tbl-colwidths: [22, 58, 20]
-tabela(pd.DataFrame({
-    "Variável": ["Sepal.Length", "Sepal.Width", "Petal.Length", "Petal.Width", "Species"],
-    "Descrição": [
-        "Comprimento da sépala", "Largura da sépala",
-        "Comprimento da pétala", "Largura da pétala",
-        "Espécie da flor (setosa, versicolor, virginica)",
-    ],
-    "Unidade": ["cm", "cm", "cm", "cm", "categórica"],
-}))
+#| label: tbl-dicionario
+#| tbl-cap: "Descrição das variáveis da base College."
+dicionario = pd.DataFrame([
+    ("Private", "Categoria", "Natureza da instituição: No = pública; Yes = privada."),
+    ("Apps", "Contagem", "Candidaturas recebidas; variável resposta."),
+    ("Accept", "Contagem", "Candidaturas aceitas."),
+    ("Enroll", "Contagem", "Novos alunos matriculados."),
+    ("Top10perc", "%", "Ingressantes no top 10% da turma do ensino médio."),
+    ("Top25perc", "%", "Ingressantes no top 25% da turma do ensino médio."),
+    ("F.Undergrad", "Contagem", "Graduandos em tempo integral."),
+    ("P.Undergrad", "Contagem", "Graduandos em tempo parcial."),
+    ("Outstate", "US$", "Mensalidade para estudantes de fora do estado."),
+    ("Room.Board", "US$", "Custo de moradia e alimentação."),
+    ("Books", "US$", "Custo estimado com livros."),
+    ("Personal", "US$", "Gasto pessoal estimado."),
+    ("PhD", "%", "Corpo docente com doutorado."),
+    ("Terminal", "%", "Corpo docente com grau terminal da área."),
+    ("S.F.Ratio", "Razão", "Número de estudantes por docente."),
+    ("perc.alumni", "%", "Ex-alunos que realizam doações."),
+    ("Expend", "US$/aluno", "Gasto institucional por aluno."),
+    ("Grad.Rate", "%", "Taxa de graduação."),
+], columns=["Variável", "Unidade/tipo", "Descrição"])
+tabela(dicionario)
 ```
 
-A base contém $n=150$ observações e não apresenta valores ausentes.
+A @tbl-qualidade sintetiza as verificações de completude, duplicidade, faixas e relações lógicas
+entre as variáveis.
 
-## Análise exploratória
+```{python}
+#| label: tbl-qualidade
+#| tbl-cap: "Síntese das verificações de qualidade dos dados."
+percentuais = ["Top10perc", "Top25perc", "PhD", "Terminal", "perc.alumni", "Grad.Rate"]
+qualidade = pd.DataFrame([
+    ("Valores ausentes", "Nenhum", int(dados.isna().sum().sum())),
+    ("Linhas duplicadas", "Nenhuma", int(dados.duplicated().sum())),
+    ("Enroll > Accept", "Nenhum caso esperado", int((dados["Enroll"] > dados["Accept"]).sum())),
+    ("Accept > Apps", "Nenhum caso esperado", int((dados["Accept"] > dados["Apps"]).sum())),
+    ("Top10perc > Top25perc", "Nenhum caso esperado",
+     int((dados["Top10perc"] > dados["Top25perc"]).sum())),
+    ("Percentuais fora de [0, 100]", "Requer conferência",
+     int(((dados[percentuais] < 0) | (dados[percentuais] > 100)).sum().sum())),
+], columns=["Verificação", "Critério", "Ocorrências"])
+tabela(qualidade)
+```
 
-A Tabela -@tbl-descritivas apresenta a média e o desvio-padrão das quatro variáveis morfológicas,
-separadamente para cada espécie.
+Os resultados permitem utilizar todas as observações sem imputação ou correção prévia. As únicas
+ressalvas são `Grad.Rate = 118`, na observação 96, e `PhD = 103`, na observação 583; sem informação
+que confirme sua origem, ambos foram preservados para posterior análise de sensibilidade.
+
+```{python}
+#| label: tbl-casos-qualidade
+#| tbl-cap: "Observações com percentuais superiores a 100."
+casos_qualidade = (
+    dados.loc[(dados["Grad.Rate"] > 100) | (dados["PhD"] > 100),
+              ["Private", "Apps", "Accept", "Enroll", "PhD", "Terminal", "Grad.Rate"]]
+    .reset_index()
+)
+casos_qualidade["Private"] = casos_qualidade["Private"].astype(str).map(ROTULOS_PRIVATE)
+tabela(casos_qualidade)
+```
+
+# Análise exploratória univariada e bivariada
+
+## Estatísticas descritivas
+
+As estatísticas da @tbl-descritivas mostram heterogeneidade entre as instituições e assimetria à
+direita nas principais medidas de demanda e porte. Em `Apps`, por exemplo, a média é quase o dobro
+da mediana, indicando que poucas instituições com demanda muito elevada deslocam a média para cima.
 
 ```{python}
 #| label: tbl-descritivas
-#| tbl-cap: "Média e desvio-padrão (dp) das variáveis morfológicas, por espécie."
-#| tbl-colwidths: [16, 10.5, 10.5, 10.5, 10.5, 10.5, 10.5, 10.5, 10.5]
-descritivas_especie = (
-    dados.groupby("Species", observed=True)[variaveis_morfologicas]
-    .agg(["mean", "std"])
-    .round(2)
-)
-descritivas_especie.columns = [
-    "Comp. Sépala (média)", "Comp. Sépala (dp)",
-    "Larg. Sépala (média)", "Larg. Sépala (dp)",
-    "Comp. Pétala (média)", "Comp. Pétala (dp)",
-    "Larg. Pétala (média)", "Larg. Pétala (dp)",
-]
-tabela(descritivas_especie.reset_index().rename(columns={"Species": "Espécie"}))
-```
-
-```{python}
-#| label: fig-boxplots
-#| fig-cap: "Box-plots das variáveis morfológicas, por espécie."
-fig, axes = plt.subplots(2, 2, figsize=(7.4, 5.2))
-for ax, variavel in zip(axes.flat, variaveis_morfologicas):
-    grupos = [
-        dados.loc[dados["Species"] == especie, variavel]
-        for especie in cores_especies
-    ]
-    box = ax.boxplot(
-        grupos,
-        patch_artist=True,
-        widths=0.62,
-        medianprops={"color": "#333333", "linewidth": 1.2},
-        boxprops={"edgecolor": "#333333", "linewidth": 0.9},
-        whiskerprops={"color": "#333333", "linewidth": 0.9},
-        capprops={"color": "#333333", "linewidth": 0.9},
-        flierprops={
-            "marker": "o", "markersize": 2.8,
-            "markerfacecolor": "#333333", "markeredgecolor": "#333333",
-        },
-    )
-    for patch, cor in zip(box["boxes"], cores_especies.values()):
-        patch.set_facecolor(cor)
-    ax.add_patch(Rectangle(
-        (0, 1.0), 1, 0.11, transform=ax.transAxes, clip_on=False,
-        facecolor="#D9D9D9", edgecolor="#333333", linewidth=0.8,
-    ))
-    ax.text(
-        0.5, 1.055, rotulos_variaveis[variavel],
-        transform=ax.transAxes, ha="center", va="center", fontsize=8.5,
-    )
-    ax.set_xticks([1, 2, 3], list(cores_especies))
-    estilo_grade(ax)
-for ax in axes[:, 0]:
-    ax.set_ylabel("Valor (cm)")
-for ax in axes[1, :]:
-    ax.set_xlabel("Espécie")
-fig.subplots_adjust(hspace=0.34, wspace=0.18)
-plt.show()
-```
-
-A Figura -@fig-boxplots evidencia separação quase completa entre as espécies no comprimento e na
-largura da pétala, enquanto as variáveis da sépala apresentam maior sobreposição. A pétala é,
-portanto, a região morfológica que melhor distingue visualmente as três espécies.
-
-### Análise de correlação
-
-```{python}
-#| label: fig-corr
-#| fig-cap: "Matriz de correlação de Pearson entre as variáveis morfológicas."
-cont = dados.drop(columns="Species")
-corr = cont.corr()
-fig, ax = plt.subplots(figsize=(4.3, 3.7))
-n_corr = len(corr.columns)
-normalizador = plt.Normalize(-1, 1)
-mapa_cores = plt.cm.RdBu
-
-for i in range(n_corr):
-    for j in range(i, n_corr):
-        r = corr.iloc[i, j]
-        ax.add_patch(Rectangle(
-            (j, i), 1, 1, facecolor="white",
-            edgecolor="#B3B3B3", linewidth=0.8,
-        ))
-        if i == j:
-            ax.plot(
-                [j + 0.08, j + 0.92], [i + 0.92, i + 0.08],
-                color=mapa_cores(normalizador(r)), linewidth=1.0,
-            )
-        else:
-            ax.add_patch(Ellipse(
-                (j + 0.5, i + 0.5),
-                width=0.84,
-                height=max(0.08, 0.84 * (1 - abs(r))),
-                angle=-45 if r >= 0 else 45,
-                facecolor=mapa_cores(normalizador(r)),
-                edgecolor="none",
-            ))
-        ax.text(
-            j + 0.5, i + 0.5, f"{r:.2f}",
-            ha="center", va="center", fontsize=8.5,
-            fontstyle="italic" if i == j else "normal",
-        )
-
-ax.set_xlim(0, n_corr)
-ax.set_ylim(n_corr, 0)
-ax.set_aspect("equal")
-ax.set_xticks(np.arange(n_corr) + 0.5, corr.columns, rotation=50, ha="left")
-ax.xaxis.tick_top()
-ax.set_yticks(np.arange(n_corr) + 0.5, corr.columns)
-ax.tick_params(length=0)
-for spine in ax.spines.values():
-    spine.set_visible(False)
-barra = fig.colorbar(
-    plt.cm.ScalarMappable(norm=normalizador, cmap=mapa_cores),
-    ax=ax, fraction=0.045, pad=0.03,
-)
-barra.set_ticks(np.linspace(-1, 1, 6))
-plt.show()
-```
-
-A matriz de correlações da Figura -@fig-corr mostra forte associação positiva do comprimento da
-sépala com o comprimento da pétala ($r \approx 0{,}87$) e com a largura da pétala
-($r \approx 0{,}82$). O comprimento e a largura da pétala também são fortemente correlacionados
-entre si ($r \approx 0{,}96$), constituindo um indício preliminar de multicolinearidade, a ser
-formalmente verificado pelo VIF. Em contraste, a associação entre comprimento e largura da sépala
-é fraca e negativa ($r \approx -0{,}12$).
-
-```{python}
-#| label: fig-pares
-#| fig-cap: "Matriz de dispersão para pares das variáveis morfológicas, por espécie."
-n_vars = len(variaveis_morfologicas)
-fig, axes = plt.subplots(n_vars, n_vars, figsize=(7.5, 6.4))
-
-for i, yvar in enumerate(variaveis_morfologicas):
-    for j, xvar in enumerate(variaveis_morfologicas):
-        ax = axes[i, j]
-        estilo_grade(ax)
-
-        if i == j:
-            for especie, cor in cores_especies.items():
-                valores = dados.loc[dados["Species"] == especie, xvar].to_numpy()
-                grade = np.linspace(valores.min(), valores.max(), 120)
-                densidade = stats.gaussian_kde(valores)(grade)
-                ax.fill_between(grade, densidade, color=cor, alpha=0.45)
-                ax.plot(grade, densidade, color="#333333", linewidth=0.6)
-            ax.set_yticks([])
-        elif i > j:
-            for especie, cor in cores_especies.items():
-                grupo = dados[dados["Species"] == especie]
-                ax.scatter(
-                    grupo[xvar], grupo[yvar],
-                    s=7, alpha=0.65, color=cor, edgecolors="none",
-                )
-        else:
-            ax.grid(False)
-            ax.set_facecolor("white")
-            ax.text(
-                0.5, 0.76, f"Corr: {dados[xvar].corr(dados[yvar]):.3f}",
-                transform=ax.transAxes, ha="center", va="center", fontsize=8,
-            )
-            for pos, (especie, cor) in zip(
-                [0.56, 0.38, 0.20], cores_especies.items()
-            ):
-                grupo = dados[dados["Species"] == especie]
-                r_especie = grupo[xvar].corr(grupo[yvar])
-                ax.text(
-                    0.5, pos, f"{especie}: {r_especie:.3f}",
-                    transform=ax.transAxes, ha="center", va="center",
-                    fontsize=7.2, color=cor,
-                )
-            ax.set_xticks([])
-            ax.set_yticks([])
-
-        if i == 0:
-            ax.set_title(rotulos_variaveis[xvar], fontsize=8.2, pad=4)
-        if i < n_vars - 1:
-            ax.tick_params(labelbottom=False)
-        if j > 0:
-            ax.tick_params(labelleft=False)
-        ax.tick_params(axis="both", labelsize=6.5)
-
-fig.subplots_adjust(hspace=0.08, wspace=0.08)
-plt.show()
-```
-
-A matriz de dispersão da Figura -@fig-pares confirma que *setosa* forma um agrupamento bem distinto
-das demais espécies em praticamente todas as variáveis, enquanto *versicolor* e *virginica*
-apresentam maior sobreposição, sobretudo nas medidas da sépala. Não foram observados valores
-incompatíveis com os intervalos plausíveis das variáveis, como medidas negativas ou discrepantes
-por ordem de grandeza, não havendo indícios de erros de digitação na base.
-
-### Multicolinearidade: o VIF
-
-```{python}
-#| label: tbl-modeloCompleto
-#| tbl-cap: "Estimativas do modelo inicial (sem a espécie)."
-modelo1 = smf.ols("Q('Sepal.Length') ~ Q('Sepal.Width') + Q('Petal.Length') + Q('Petal.Width')",
-                   data=dados).fit()
-tabela_coeficientes(modelo1)
-```
-
-```{python}
-#| label: tbl-vif
-#| tbl-cap: "Fator de inflação de variância (VIF) de cada variável explicativa no modelo inicial."
-vif_manual(dados[["Sepal.Width", "Petal.Length", "Petal.Width"]]).rename("VIF").round(2).to_frame()
-```
-
-O modelo inicial apresenta ajuste elevado ($R^2$ ajustado $=$
-`{python} float(round(modelo1.rsquared_adj, 4))`). Entretanto, os VIF de `Petal.Length` e
-`Petal.Width`, ambos superiores a 14, confirmam multicolinearidade severa entre essas variáveis.
-Embora o ajuste global permaneça bom, a redundância de informação infla os erros-padrão e torna
-instáveis as interpretações individuais. O sinal negativo de `Petal.Width`, apesar de sua
-correlação positiva com a resposta, é outro indício dessa instabilidade e exige correção antes da
-validação do modelo.
-
-## Seleção do modelo final
-
-```{python}
-#| label: tbl-selecao
-#| tbl-cap: "Comparação dos modelos candidatos: ajuste, AIC e BIC."
-modelo2 = smf.ols("Q('Sepal.Length') ~ Q('Sepal.Width') + Q('Petal.Length')", data=dados).fit()
-modelo3 = smf.ols("Q('Sepal.Length') ~ Q('Sepal.Width') + Q('Petal.Width')", data=dados).fit()
-tabela(pd.DataFrame({
-    "Modelo": ["modelo1 (completo)", "modelo2 (sem Petal.Width)", "modelo3 (sem Petal.Length)"],
-    "R² ajustado": [modelo1.rsquared_adj, modelo2.rsquared_adj, modelo3.rsquared_adj],
-    "AIC": [modelo1.aic, modelo2.aic, modelo3.aic],
-    "BIC": [modelo1.bic, modelo2.bic, modelo3.bic],
-}))
-```
-
-A Tabela -@tbl-selecao compara as alternativas de remoção de uma das variáveis da pétala. O
-modelo2, sem `Petal.Width`, apresenta AIC e BIC substancialmente menores que o modelo3, sem
-`Petal.Length`, sendo a alternativa preferível entre os dois modelos reduzidos. Esse resultado é
-coerente com a análise exploratória, pois `Petal.Length` apresenta associação ligeiramente mais
-forte com `Sepal.Length` e preserva maior capacidade explicativa.
-
-```{python}
-#| label: tbl-anova2
-#| tbl-cap: "Teste F comparando o modelo2 ao modelo completo (modelo1)."
-tab_anova2 = anova_lm(modelo2, modelo1).rename(
-    columns={"df_resid": "GL Res.", "ssr": "SQ Res.", "df_diff": "GL", "ss_diff": "SQ",
-             "F": "Estatística F", "Pr(>F)": "p-valor"}
-)
-tab_anova2.insert(0, "Modelo", ["modelo2", "modelo1"])
-tabela(tab_anova2, digitos=4)
-```
-
-O teste F rejeita a hipótese de que o modelo reduzido sem `Petal.Width` apresenta ajuste idêntico
-ao modelo completo ($p<0{,}001$). Assim, a variável possui contribuição estatística quando
-considerada no modelo completo, embora sua presença simultânea com `Petal.Length` produza a
-multicolinearidade severa identificada anteriormente. A escolha do modelo reduzido representa,
-portanto, um compromisso entre pequena perda de ajuste e maior estabilidade interpretativa.
-
-### Seleção automática (eliminação retroativa por AIC)
-
-A seleção por eliminação retroativa foi conduzida removendo, em cada etapa, a variável cuja
-exclusão produziria a maior redução no AIC. O procedimento foi encerrado quando nenhuma remoção
-adicional melhorou o critério, seguindo a mesma lógica do procedimento *stepwise* empregado no
-PDF de referência.
-
-```{python}
-#| include: false
-def selecao_retroativa(formula_completa, dados, resposta):
-    termos = formula_completa
-    modelo_atual = smf.ols(f"Q('{resposta}') ~ " + " + ".join(f"Q('{t}')" for t in termos),
-                            data=dados).fit()
-    print(f"Início: AIC = {modelo_atual.aic:.2f}  |  termos: {termos}")
-    while True:
-        aics = {}
-        for termo in termos:
-            restantes = [t for t in termos if t != termo]
-            f = f"Q('{resposta}') ~ " + " + ".join(f"Q('{t}')" for t in restantes)
-            aics[termo] = smf.ols(f, data=dados).fit().aic
-        melhor_termo = min(aics, key=aics.get)
-        if aics[melhor_termo] >= modelo_atual.aic:
-            print("Nenhuma remoção melhora o AIC. Processo encerrado.")
-            break
-        termos = [t for t in termos if t != melhor_termo]
-        modelo_atual = smf.ols(f"Q('{resposta}') ~ " + " + ".join(f"Q('{t}')" for t in termos),
-                                data=dados).fit()
-        print(f"- Remove {melhor_termo}: AIC = {modelo_atual.aic:.2f}  |  termos: {termos}")
-    return modelo_atual
-
-_ = selecao_retroativa(["Sepal.Width", "Petal.Length", "Petal.Width"], dados, "Sepal.Length")
-```
-
-O critério puramente preditivo não recomenda a remoção de nenhuma variável, pois o modelo completo
-já constitui o ótimo local segundo o AIC, apesar da colinearidade. Como o objetivo também inclui a
-interpretação dos efeitos individuais, adotamos o modelo2 nas etapas seguintes: a retirada de
-`Petal.Width` reduz a multicolinearidade e mantém a maior parte do poder explicativo do modelo
-completo.
-
-## Diagnóstico do modelo selecionado
-
-```{python}
-#| label: tbl-modelo2
-#| tbl-cap: "Estimativas dos coeficientes do modelo2 (modelo selecionado)."
-tabela_coeficientes(modelo2)
-```
-
-```{python}
-#| label: fig-diagnostico
-#| fig-cap: "Análise de resíduos do modelo2."
-fig, axes = plt.subplots(2, 2, figsize=(6.5, 5))
-ajustados = modelo2.fittedvalues
-residuos = modelo2.resid
-res_pad = modelo2.get_influence().resid_studentized_internal
-indices_rotulo = np.argsort(np.abs(res_pad))[-3:]
-
-for ax in axes.flat:
-    estilo_grade(ax)
-
-axes[0, 0].scatter(ajustados, residuos, s=15, color="#4D4D4D")
-suave = lowess(residuos, ajustados, frac=0.6)
-axes[0, 0].plot(suave[:, 0], suave[:, 1], color="blue", linewidth=1.0)
-axes[0, 0].axhline(0, color="#777777", lw=0.7, ls="--")
-axes[0, 0].set_title("Residuals vs Fitted")
-axes[0, 0].set_xlabel("Fitted values"); axes[0, 0].set_ylabel("Residuals")
-for idx in indices_rotulo:
-    axes[0, 0].text(ajustados.iloc[idx], residuos.iloc[idx], str(idx), fontsize=7)
-
-quantis, residuos_ord = stats.probplot(res_pad, dist="norm", fit=False)
-axes[0, 1].scatter(quantis, residuos_ord, s=12, color="#4D4D4D")
-coef_qq = np.polyfit(quantis, residuos_ord, 1)
-axes[0, 1].plot(
-    quantis, coef_qq[0] * np.asarray(quantis) + coef_qq[1],
-    color="#777777", linewidth=0.8, linestyle="--",
-)
-axes[0, 1].set_title("Normal Q-Q")
-axes[0, 1].set_xlabel("Theoretical Quantiles")
-axes[0, 1].set_ylabel("Standardized residuals")
-
-raiz_residuos = np.sqrt(np.abs(res_pad))
-axes[1, 0].scatter(ajustados, raiz_residuos, s=15, color="#4D4D4D")
-suave = lowess(raiz_residuos, ajustados, frac=0.6)
-axes[1, 0].plot(suave[:, 0], suave[:, 1], color="blue", linewidth=1.0)
-axes[1, 0].set_title("Scale-Location")
-axes[1, 0].set_xlabel("Fitted values")
-axes[1, 0].set_ylabel(r"$\sqrt{|Standardized\ residuals|}$")
-
-alavancagem = modelo2.get_influence().hat_matrix_diag
-axes[1, 1].scatter(alavancagem, res_pad, s=15, color="#4D4D4D")
-suave = lowess(res_pad, alavancagem, frac=0.6)
-axes[1, 1].plot(suave[:, 0], suave[:, 1], color="blue", linewidth=1.0)
-axes[1, 1].axhline(0, color="#777777", lw=0.7, ls="--")
-axes[1, 1].set_title("Residuals vs Leverage")
-axes[1, 1].set_xlabel("Leverage")
-axes[1, 1].set_ylabel("Standardized residuals")
-for idx in indices_rotulo:
-    axes[1, 1].text(alavancagem[idx], res_pad[idx], str(idx), fontsize=7)
-
-plt.tight_layout()
-plt.show()
-```
-
-```{python}
-#| label: fig-envelope
-#| fig-cap: "Gráfico de envelope simulado do modelo2."
-q, obs, low, up = envelope_normal(modelo2)
-fig, ax = plt.subplots(figsize=(4.5, 3.5))
-ax.plot(q, low, color="black", lw=0.8)
-ax.plot(q, up, color="black", lw=0.8)
-ax.plot(q, (low + up) / 2, "--", color="black", lw=0.8)
-ax.scatter(q, obs, s=10, facecolors="none", edgecolors="black", linewidths=0.6)
-ax.set_xlabel("Quantis teóricos N(0,1)"); ax.set_ylabel("Resíduos")
-ax.set_facecolor("white")
-ax.grid(False)
-plt.show()
-```
-
-As Figuras -@fig-diagnostico e -@fig-envelope não indicam padrões sistemáticos relevantes nos
-resíduos. A dispersão em torno de zero permanece aproximadamente constante, o gráfico
-quantil-quantil não apresenta desvios graves e a grande maioria dos pontos permanece dentro da
-banda do envelope simulado. Esses resultados dão suporte às suposições de linearidade, variância
-constante e normalidade dos erros.
-
-### Identificação de pontos atípicos, de alavanca e influentes
-
-```{python}
-#| label: tbl-influencia
-#| tbl-cap: "Observações atípicas, de alavanca e/ou influentes segundo o modelo2."
-infl = modelo2.get_influence()
-n, p = modelo2.nobs, modelo2.df_model + 1
-limiar_alav = 2 * p / n
-limiar_cook = 4 / n
-tab_infl = pd.DataFrame({
-    "Espécie": dados["Species"].values,
-    "Resíduo estud.": infl.resid_studentized_internal,
-    "Alavancagem": infl.hat_matrix_diag,
-    "Dist. de Cook": infl.cooks_distance[0],
+#| tbl-cap: "Estatísticas descritivas das variáveis numéricas."
+descritivas = dados.select_dtypes(include=np.number).describe(
+    percentiles=[0.25, 0.50, 0.75]
+).T.reset_index()
+descritivas = descritivas.rename(columns={
+    "index": "Variável", "mean": "Média", "std": "DP", "min": "Mín.",
+    "25%": "Q1", "50%": "Mediana", "75%": "Q3", "max": "Máx.",
 })
-tab_infl["Atípico"] = tab_infl["Resíduo estud."].abs() > 2
-tab_infl["Alavanca"] = tab_infl["Alavancagem"] > limiar_alav
-tab_infl["Influente"] = tab_infl["Dist. de Cook"] > limiar_cook
-tab_infl_exibicao = (
-    tab_infl.loc[tab_infl[["Atípico", "Alavanca", "Influente"]].any(axis=1)]
-    .sort_values("Dist. de Cook", ascending=False)
-    .reset_index(names="Observação")
+descritivas = descritivas[["Variável", "Média", "DP", "Mín.", "Q1", "Mediana", "Q3", "Máx."]]
+for coluna in descritivas.columns[1:]:
+    descritivas[coluna] = descritivas[coluna].map(lambda x: numero_br(x, 1))
+tabela(descritivas)
+```
+
+## Distribuição de Apps e valores extremos
+
+`Apps` varia de 81 a 48.094 candidaturas, com média de 3.001,6, mediana de 1.558 e assimetria
+amostral de 3,72. A @fig-distribuicao-apps confirma a forte cauda à direita.
+
+```{python}
+#| label: fig-distribuicao-apps
+#| fig-cap: "Histograma e box-plot do número de candidaturas recebidas."
+#| fig-width: 6.2
+#| fig-height: 2.8
+fig, axes = plt.subplots(1, 2, figsize=(6.2, 2.8))
+sns.histplot(dados["Apps"], bins=30, color="#4C78A8", edgecolor="white", ax=axes[0])
+axes[0].set_title("Histograma de Apps")
+axes[0].set_xlabel("Candidaturas")
+axes[0].set_ylabel("Frequência")
+
+sns.boxplot(x=dados["Apps"], color="#72B7B2", fliersize=2.4, ax=axes[1])
+axes[1].set_title("Box-plot de Apps")
+axes[1].set_xlabel("Candidaturas")
+axes[1].set_ylabel("")
+
+for ax in axes:
+    estilo_eixo(ax)
+fig.tight_layout()
+plt.show()
+```
+
+Pela regra de $1{,}5\,AIQ$, 70 instituições, aproximadamente 9% da amostra, superam 7.896
+candidaturas. Os cinco maiores valores constam na @tbl-extremos; eles caracterizam a
+heterogeneidade da base e não são tratados automaticamente como erros.
+
+```{python}
+#| label: tbl-extremos
+#| tbl-cap: "Cinco observações com os maiores valores de Apps."
+extremos_apps = (
+    dados.nlargest(5, "Apps")[
+        ["Private", "Apps", "Accept", "Enroll", "F.Undergrad", "Grad.Rate"]
+    ]
+    .reset_index()
 )
-for coluna in ["Atípico", "Alavanca", "Influente"]:
-    tab_infl_exibicao[coluna] = tab_infl_exibicao[coluna].map(
-        {True: "Sim", False: "Não"}
+extremos_apps["Private"] = extremos_apps["Private"].astype(str).map(ROTULOS_PRIVATE)
+tabela(extremos_apps)
+```
+
+## Comparação entre instituições públicas e privadas
+
+As instituições públicas apresentam maior número típico de candidaturas: as medianas são 4.307
+nas públicas e 1.133 nas privadas. A @tbl-resumo-private amplia a comparação para medidas de
+admissão, porte, mensalidade e investimento.
+
+```{python}
+#| label: tbl-resumo-private
+#| tbl-cap: "Média e desvio-padrão de variáveis selecionadas, por natureza da instituição."
+variaveis_comparacao = [
+    "Apps", "Accept", "Enroll", "F.Undergrad", "Outstate", "Expend"
+]
+resumo_private = (
+    dados.reset_index()
+    .melt(id_vars=["Private"], value_vars=variaveis_comparacao,
+          var_name="Variável", value_name="Valor")
+    .groupby(["Private", "Variável"], observed=True)["Valor"]
+    .agg(Média="mean", DP="std")
+    .reset_index()
+)
+resumo_private["Private"] = resumo_private["Private"].astype(str).map(ROTULOS_PRIVATE)
+resumo_private = resumo_private.rename(columns={"Private": "Instituição"})
+resumo_private["Instituição"] = pd.Categorical(
+    resumo_private["Instituição"],
+    categories=["Pública", "Privada"],
+    ordered=True,
+)
+resumo_private["Variável"] = pd.Categorical(
+    resumo_private["Variável"], categories=variaveis_comparacao, ordered=True
+)
+resumo_private = resumo_private.sort_values(["Variável", "Instituição"])
+for coluna in ["Média", "DP"]:
+    resumo_private[coluna] = resumo_private[coluna].map(lambda x: numero_br(x, 1))
+tabela(resumo_private)
+```
+
+```{python}
+#| label: fig-boxplots-private
+#| fig-cap: "Box-plots de medidas de demanda e porte, por natureza da instituição."
+#| fig-width: 6.2
+#| fig-height: 4.7
+dados_grafico = dados.assign(
+    Instituição=dados["Private"].astype(str).map(ROTULOS_PRIVATE)
+)
+ordem = ["Pública", "Privada"]
+paleta = {"Pública": CORES_PRIVATE["No"], "Privada": CORES_PRIVATE["Yes"]}
+
+variaveis_boxplot = ["Apps", "Accept", "Enroll", "F.Undergrad"]
+fig, axes = plt.subplots(2, 2, figsize=(6.2, 4.7))
+for ax, variavel in zip(axes.flat, variaveis_boxplot):
+    sns.boxplot(
+        data=dados_grafico, x="Instituição", y=variavel, order=ordem,
+        palette=paleta, hue="Instituição", legend=False,
+        fliersize=2.0, linewidth=0.9, ax=ax
     )
-tabela(tab_infl_exibicao, digitos=4)
+    ax.set_title(rotulos_variaveis[variavel])
+    ax.set_xlabel("")
+    ax.set_ylabel("")
+    estilo_eixo(ax)
+fig.tight_layout()
+plt.show()
 ```
 
-Com $n=150$ observações e $p=3$ parâmetros, o limiar de alavanca é
-$2p/n \approx 0{,}04$, enquanto o limiar de influência pela distância de Cook é
-$4/n \approx 0{,}027$. A Tabela -@tbl-influencia reúne todas as observações que ultrapassam pelo
-menos um dos critérios adotados.
+As públicas apresentam maiores médias de demanda e porte, enquanto as privadas possuem maiores
+médias de `Outstate` e `Expend`. Esse contraste sugere perfis institucionais distintos e indica que
+a diferença bruta em `Apps` também pode refletir porte, custos e investimento; trata-se, portanto,
+de comparação descritiva, sem interpretação causal.
 
-### Impacto da remoção dos pontos influentes
+## Estrutura bivariada inicial
+
+A @fig-matriz-correlacao resume as associações lineares iniciais. `Apps` apresenta relações
+positivas mais intensas com `Accept`, `Enroll` e `F.Undergrad`, variáveis ligadas ao processo de
+admissão e ao porte da instituição.
 
 ```{python}
-#| label: tbl-refinado
-#| tbl-cap: "Comparação das estimativas antes e depois da remoção dos pontos influentes."
-influentes = tab_infl.index[tab_infl["Influente"]]
-modelo2_refinado = smf.ols("Q('Sepal.Length') ~ Q('Sepal.Width') + Q('Petal.Length')",
-                            data=dados.drop(index=influentes)).fit()
-tab_refinado = pd.DataFrame({
-    "modelo2 (completo)": modelo2.params,
-    "modelo2 (refinado)": modelo2_refinado.params,
-}).round(3).assign(
-    **{"Diferença (%)": lambda d: (
-        (d["modelo2 (refinado)"] - d["modelo2 (completo)"]) / d["modelo2 (completo)"] * 100
-    ).round(2)}
+#| label: fig-matriz-correlacao
+#| fig-cap: "Matriz exploratória de correlações entre Apps e variáveis selecionadas."
+#| fig-width: 6.2
+#| fig-height: 4.8
+variaveis_correlacao = [
+    "Apps", "Accept", "Enroll", "F.Undergrad",
+    "P.Undergrad", "Outstate", "Expend"
+]
+matriz_correlacao = dados[variaveis_correlacao].corr()
+mascara = np.triu(np.ones_like(matriz_correlacao, dtype=bool), k=1)
+
+fig, ax = plt.subplots(figsize=(6.2, 4.8))
+ax.grid(False)
+sns.heatmap(
+    matriz_correlacao, mask=mascara, annot=True, fmt=".2f",
+    cmap="RdBu_r", center=0, vmin=-1, vmax=1, square=True,
+    linewidths=0.6, linecolor="white",
+    cbar_kws={"label": "Correlação", "shrink": 0.78},
+    annot_kws={"size": 8}, ax=ax
 )
-tab_refinado = tab_refinado.rename(index={
-    "Intercept": "Intercepto",
-    "Q('Sepal.Width')": "Sepal.Width",
-    "Q('Petal.Length')": "Petal.Length",
-}).reset_index(names="Termo")
-tabela(tab_refinado, digitos=3)
+ax.set_xticklabels(ax.get_xticklabels(), rotation=38, ha="right")
+ax.set_yticklabels(ax.get_yticklabels(), rotation=0)
+fig.tight_layout()
+plt.show()
 ```
 
-As variações nas estimativas após a remoção dos pontos influentes são modestas. Como seus valores
-permanecem dentro dos intervalos plausíveis das variáveis e não há evidência de erro de medição,
-essas observações parecem refletir a variabilidade natural da amostra. Optamos, portanto, por
-manter todas as observações no modelo selecionado, evitando descartar informação sem justificativa
-substantiva.
-
-## Interpretações do modelo selecionado
-
-O modelo2 explica uma parcela substancial da variação observada no comprimento da sépala
-($R^2$ ajustado $=$ `{python} float(round(modelo2.rsquared_adj, 3))`). Mantendo-se a outra variável
-constante, cada centímetro adicional na largura da sépala está associado a um aumento médio de
-`{python} float(round(modelo2.params["Q('Sepal.Width')"], 3))` cm no comprimento da sépala; para
-cada centímetro adicional no comprimento da pétala, o aumento médio esperado é de
-`{python} float(round(modelo2.params["Q('Petal.Length')"], 3))` cm. Os dois efeitos são positivos e
-coerentes com a análise exploratória, ao contrário do sinal instável observado no modelo inicial.
-
-### Coeficientes padronizados
+A @fig-matriz-dispersao complementa o resumo ao mostrar a forma das relações, as distribuições
+marginais e os grupos público e privado. As tendências são predominantemente crescentes, mas a
+variabilidade de `Apps` aumenta nos níveis mais altos dos preditores.
 
 ```{python}
-#| label: tbl-padronizados
-#| tbl-cap: "Coeficientes padronizados do modelo selecionado."
-padronizados = dados[["Sepal.Length", "Sepal.Width", "Petal.Length"]].apply(stats.zscore)
-modelo2_beta = smf.ols("Q('Sepal.Length') ~ Q('Sepal.Width') + Q('Petal.Length') - 1",
-                        data=padronizados).fit()
-tabela(pd.DataFrame({
-    "Variável": ["Sepal.Width", "Petal.Length"],
-    "Coeficiente padronizado": [
-        modelo2_beta.params["Q('Sepal.Width')"],
-        modelo2_beta.params["Q('Petal.Length')"],
-    ],
-}), digitos=4)
+#| label: fig-matriz-dispersao
+#| fig-cap: "Matriz de dispersão de medidas de demanda e porte, por natureza da instituição."
+#| fig-width: 6.2
+#| fig-height: 6.2
+variaveis_pares = ["Apps", "Accept", "Enroll", "F.Undergrad"]
+dados_pares = dados.assign(
+    Instituição=dados["Private"].astype(str).map(ROTULOS_PRIVATE)
+)
+grade_pares = sns.pairplot(
+    dados_pares,
+    vars=variaveis_pares,
+    hue="Instituição",
+    hue_order=["Pública", "Privada"],
+    palette=paleta,
+    diag_kind="hist",
+    height=1.48,
+    aspect=1,
+    plot_kws={"alpha": 0.38, "s": 10, "edgecolor": "none"},
+    diag_kws={"bins": 24, "alpha": 0.48, "edgecolor": "white"},
+)
+grade_pares.fig.set_size_inches(6.2, 6.2)
+sns.move_legend(
+    grade_pares, "upper center", bbox_to_anchor=(0.5, 1.01),
+    ncol=2, title="Instituição", frameon=False
+)
+grade_pares.fig.tight_layout(rect=[0, 0, 1, 0.94])
+plt.show()
 ```
 
-Após colocar as variáveis na mesma escala, os coeficientes padronizados mostram que
-`Petal.Length` possui contribuição relativa consideravelmente maior que `Sepal.Width` para
-explicar o comprimento da sépala. Essa comparação complementa a interpretação dos coeficientes
-originais, cujas magnitudes dependem das unidades de medida.
+Esses gráficos constituem apenas uma triagem; a avaliação formal permanece reservada à seção de
+correlação e multicolinearidade.
 
-## Regressão com variáveis dummy (a espécie como explicativa)
+# Modelo inicial
 
-Até esta etapa, o modelo selecionado contém apenas medidas morfológicas contínuas. Para examinar o
-papel da espécie, construímos duas variáveis indicadoras e adotamos *setosa* como categoria de
-referência. Assim, os coeficientes de *versicolor* e *virginica* representam diferenças em relação
-a *setosa*, mantidas constantes as demais variáveis do modelo.
+O modelo inicial inclui os 16 preditores numéricos e a variável categórica `Private`. Para sua
+incorporação, foi definida `Private_Yes = 1` para instituições privadas e 0 para públicas, tornando
+as instituições públicas a categoria de referência. O ajuste foi realizado por mínimos quadrados
+ordinários com as 777 observações, sem seleção ou remoção de variáveis.
 
 ```{python}
-#| label: tbl-dummies
-#| tbl-cap: "Exemplo da codificação dummy da variável Species, com setosa como referência."
-dummies = pd.get_dummies(dados["Species"], drop_first=True, dtype=int)
-exemplo_dummies = pd.concat(
-    [dados["Species"].astype(str).rename("Species"), dummies], axis=1
-).head(6)
-tabela(exemplo_dummies)
+#| label: ajuste-modelo-inicial
+#| include: false
+X_inicial = sm.add_constant(dados_modelo[preditores_modelo_inicial], has_constant="add")
+y_inicial = dados_modelo[variavel_resposta]
+modelo_inicial = sm.OLS(y_inicial, X_inicial).fit()
 ```
+
+## Formulação do modelo
+
+Seja $x_{ij}$ o valor do $j$-ésimo preditor numérico para a instituição $i$. A forma geral do
+modelo completo é:
+
+$$
+\mathrm{Apps}_i =
+\beta_0 + \beta_1\mathrm{Private\_Yes}_i
++ \sum_{j=2}^{17}\beta_j x_{ij} + \varepsilon_i.
+$$
+
+Nessa expressão, cada $\beta_j$ representa uma associação parcial com `Apps`, mantidos os demais
+preditores constantes, e $\varepsilon_i$ reúne a variação não explicada pelo modelo.
+
+## Coeficientes e ajuste global
+
+As estimativas dos coeficientes, erros-padrão, estatísticas de teste e intervalos de confiança são
+apresentadas na @tbl-modelo-inicial.
 
 ```{python}
-#| label: tbl-comEspecie
-#| tbl-cap: "Estimativas do modelo com Sepal.Width, Petal.Length e Species."
-modelo4 = smf.ols("Q('Sepal.Length') ~ Q('Sepal.Width') + Q('Petal.Length') + Species",
-                   data=dados).fit()
-tabela_coeficientes(modelo4)
+#| label: tbl-modelo-inicial
+#| tbl-cap: "Estimativas do modelo linear inicial com todos os preditores."
+ic_inicial = modelo_inicial.conf_int()
+coeficientes_iniciais = pd.DataFrame({
+    "Termo": modelo_inicial.params.index,
+    "Estimativa": modelo_inicial.params.values,
+    "Erro padrão": modelo_inicial.bse.values,
+    "Estatística t": modelo_inicial.tvalues.values,
+    "p-valor": modelo_inicial.pvalues.values,
+    "Limite inferior": ic_inicial[0].values,
+    "Limite superior": ic_inicial[1].values,
+})
+coeficientes_iniciais["Termo"] = coeficientes_iniciais["Termo"].replace({
+    "const": "Intercepto",
+    "Private_Yes": "Privada (Yes versus No)",
+})
+for coluna in ["Estimativa", "Erro padrão", "Estatística t",
+               "Limite inferior", "Limite superior"]:
+    coeficientes_iniciais[coluna] = coeficientes_iniciais[coluna].map(
+        lambda x: numero_br(x, 3)
+    )
+coeficientes_iniciais["p-valor"] = modelo_inicial.pvalues.values
+coeficientes_iniciais["p-valor"] = coeficientes_iniciais["p-valor"].map(pvalor_br)
+tabela(coeficientes_iniciais)
 ```
 
-Com a inclusão simultânea da espécie e de `Petal.Length`, os coeficientes de *versicolor* e
-*virginica* tornam-se negativos. Essa interpretação condicional é contraintuitiva quando comparada
-aos box-plots, mas decorre da forte associação entre espécie e comprimento da pétala: as variáveis
-carregam informação parcialmente redundante e competem para explicar a mesma parcela da
-variabilidade, produzindo coeficientes instáveis.
+O $R^2$ ajustado de 0,9276 indica que o conjunto de preditores descreve 92,76% da variação amostral
+de `Apps`; o teste global confirma que o modelo possui contribuição explicativa
+($F=585{,}86$; $p<0{,}001$). Ao nível de 5%, `Accept`, `Enroll`, `Top10perc`, `Top25perc`,
+`Outstate`, `Room.Board`, `Expend`, `Grad.Rate` e `Private_Yes` apresentam coeficientes
+significativos.
 
-### Modelo sem Petal.Length, com a espécie
+Mantidos os demais preditores constantes, o coeficiente de `Private_Yes` associa instituições
+privadas a cerca de 494 candidaturas a menos que instituições públicas. Essa interpretação é
+preliminar: a proximidade entre variáveis de admissão e porte pode afetar sinais e erros-padrão,
+razão pela qual nenhum preditor é removido nesta etapa.
 
-```{python}
-#| label: tbl-semPetalLength
-#| tbl-cap: "Estimativas do modelo com Sepal.Width e Species (sem Petal.Length)."
-modelo5 = smf.ols("Q('Sepal.Length') ~ Q('Sepal.Width') + Species", data=dados).fit()
-tabela_coeficientes(modelo5)
-```
+# Correlação e multicolinearidade
 
-Após retirar `Petal.Length`, os coeficientes das espécies tornam-se positivos e concordam com a
-análise exploratória. Mantendo `Sepal.Width` constante, flores *virginica* apresentam, em média,
-sépalas mais compridas que flores *setosa*; para *versicolor*, a diferença segue a mesma direção,
-mas com menor magnitude. O ajuste inferior ao do modelo2 evidencia o compromisso entre poder
-explicativo e clareza de interpretação quando uma variável contínua está fortemente associada a
-uma variável categórica.
+Esta seção avaliará a correlação e a multicolinearidade entre os preditores do modelo.
 
-### Alterando a categoria de referência
+# Seleção do modelo final
 
-Para demonstrar o papel da categoria de referência, o mesmo modelo foi reparametrizado tomando
-*virginica* como base de comparação:
+Esta seção comparará modelos candidatos e justificará a escolha da especificação final.
 
-```{python}
-#| label: tbl-referencia-virginica
-#| tbl-cap: "Estimativas do modelo com virginica como categoria de referência."
-modelo6 = smf.ols(
-    "Q('Sepal.Length') ~ Q('Sepal.Width') + C(Species, Treatment(reference='virginica'))",
-    data=dados,
-).fit()
-tabela_coeficientes(modelo6)
-```
+# Validação cruzada K-Fold
 
-A troca da categoria de referência não modifica os valores ajustados, os resíduos nem a qualidade
-global do modelo. Apenas a parametrização é alterada: o intercepto passa a representar
-*virginica*, e os coeficientes das demais espécies expressam diferenças médias em relação a essa
-categoria.
+Esta seção avaliará o desempenho preditivo e a estabilidade do modelo selecionado.
 
-## Comparação geral dos modelos
+# Interpretação dos coeficientes
 
-```{python}
-#| label: tbl-geral
-#| tbl-cap: "Comparação das medidas de ajuste entre todos os modelos considerados."
-tabela(pd.DataFrame({
-    "Modelo": ["modelo1 (completo, sem espécie)", "modelo2 (sem Petal.Width)",
-               "modelo3 (sem Petal.Length)", "modelo4 (com espécie e Petal.Length)",
-               "modelo5 (com espécie, sem Petal.Length)"],
-    "n": [int(m.nobs) for m in (modelo1, modelo2, modelo3, modelo4, modelo5)],
-    "R² ajustado": [round(m.rsquared_adj, 3) for m in (modelo1, modelo2, modelo3, modelo4, modelo5)],
-    "AIC": [round(m.aic, 2) for m in (modelo1, modelo2, modelo3, modelo4, modelo5)],
-}))
-```
+Esta seção interpretará os coeficientes do modelo final no contexto das características
+institucionais.
 
-A comparação geral mostra que o modelo2 oferece o melhor equilíbrio entre ajuste, parcimônia e
-estabilidade dos coeficientes. Por esse motivo, ele é mantido como modelo selecionado e utilizado
-na etapa de previsões.
+# Diagnóstico do modelo
+
+Esta seção verificará a adequação do modelo selecionado aos pressupostos da regressão linear.
+
+# QQ Plot e normalidade dos resíduos
+
+Esta seção avaliará graficamente a normalidade dos resíduos do modelo.
+
+# Pontos atípicos, de alavanca e influentes
+
+Esta seção investigará observações atípicas, de alavanca e influentes.
 
 # Previsões
 
-Utilizando o modelo2, calculamos previsões para dois conjuntos hipotéticos de valores das variáveis
-explicativas. O primeiro, $\mathbf{x}_1$, representa uma flor com largura de sépala de 2,8 cm e
-comprimento de pétala de 1,5 cm; o segundo, $\mathbf{x}_2$, representa uma flor com largura de
-sépala de 3,2 cm e comprimento de pétala de 5,0 cm.
-
-## Intervalo de confiança para o valor médio esperado
-
-```{python}
-#| label: tbl-ic
-#| tbl-cap: "Intervalos de confiança de 95% para o comprimento médio esperado da sépala, para os dois conjuntos hipotéticos."
-novos = pd.DataFrame({"Sepal.Width": [2.8, 3.2], "Petal.Length": [1.5, 5.0]})
-pred = modelo2.get_prediction(novos).summary_frame(alpha=0.05)
-tabela(pd.DataFrame({
-    "Larg. Sépala (cm)": [2.8, 3.2],
-    "Comp. Pétala (cm)": [1.5, 5.0],
-    "Estimativa (cm)": pred["mean"].round(2),
-    "Limite inferior": pred["mean_ci_lower"].round(2),
-    "Limite superior": pred["mean_ci_upper"].round(2),
-}))
-```
-
-**Interpretação prática**: para todas as flores com largura de sépala de 2,8 cm e comprimento de
-pétala de 1,5 cm, estimamos, com 95% de confiança, que o comprimento **médio** da sépala esteja
-entre os limites apresentados na primeira linha da tabela. A segunda linha possui a mesma
-interpretação para flores com largura de sépala de 3,2 cm e comprimento de pétala de 5,0 cm.
-
-## Intervalo de predição para uma nova observação
-
-```{python}
-#| label: tbl-ip
-#| tbl-cap: "Intervalos de predição de 95% para uma nova observação do comprimento da sépala, para os dois conjuntos hipotéticos."
-tabela(pd.DataFrame({
-    "Larg. Sépala (cm)": [2.8, 3.2],
-    "Comp. Pétala (cm)": [1.5, 5.0],
-    "Estimativa (cm)": pred["mean"].round(2),
-    "Limite inferior": pred["obs_ci_lower"].round(2),
-    "Limite superior": pred["obs_ci_upper"].round(2),
-}))
-```
-
-**Interpretação prática**: para **uma única nova flor** com largura de sépala de 2,8 cm e
-comprimento de pétala de 1,5 cm, prevemos, com 95% de confiança, que o comprimento de sua sépala
-estará entre os limites apresentados na primeira linha da tabela. Esse intervalo é mais amplo que
-o intervalo de confiança para a média, pois acrescenta à incerteza da estimação a variabilidade
-natural entre flores individuais. O mesmo raciocínio se aplica ao segundo conjunto hipotético.
+Esta seção apresentará previsões e respectivos intervalos para perfis plausíveis de instituições.
 
 # Conclusão
 
-As variáveis morfológicas das flores de *Iris* mostram-se fortemente associadas entre si e
-nitidamente agrupadas por espécie, especialmente nas medidas da pétala. O modelo inicial, com as
-três variáveis contínuas disponíveis, apresentou ajuste elevado, mas revelou multicolinearidade
-severa entre o comprimento e a largura da pétala, evidenciada pelos valores de VIF e pela
-instabilidade do coeficiente de `Petal.Width`.
-
-O modelo selecionado, com largura da sépala e comprimento da pétala como explicativas, preserva
-grande parte do poder explicativo do modelo completo e elimina a multicolinearidade relevante. A
-análise de resíduos e o gráfico de envelope simulado sustentam as suposições do modelo, enquanto o
-reajuste sem os pontos influentes mostra que sua remoção não altera substantivamente as
-estimativas. Por isso, todas as observações foram mantidas.
-
-A inclusão da espécie ilustra como uma variável categórica fortemente associada a uma medida
-contínua também pode produzir interpretações instáveis. A mudança da categoria de referência
-altera somente a forma de expressar os coeficientes, sem modificar as previsões. Finalmente, os
-intervalos calculados evidenciam a distinção entre estimar o comprimento médio esperado da sépala
-e prever o comprimento de uma nova flor: o intervalo de predição é necessariamente mais amplo
-porque incorpora a variabilidade individual.
-
-# Referências
+Esta seção sintetizará os principais resultados e retomará a pergunta de pesquisa.
