@@ -483,11 +483,228 @@ razão pela qual nenhum preditor é removido nesta etapa.
 
 # Correlação e multicolinearidade
 
-Esta seção avaliará a correlação e a multicolinearidade entre os preditores do modelo.
+Embora o modelo inicial apresente elevado poder explicativo, coeficientes
+individuais podem tornar-se instáveis quando existem preditores fortemente
+correlacionados entre si. Assim, antes da seleção do modelo final,
+investigou-se a presença de multicolinearidade por meio da matriz de
+correlação entre os preditores e do Fator de Inflação da Variância (VIF).
+
+Inicialmente foi construída a matriz de correlação de Pearson para as
+variáveis numéricas. Em seguida, calculou-se o VIF para cada variável do
+modelo inicial, adotando como referência o valor 10 como indicativo de
+multicolinearidade severa.
+
+```{python}
+#| label: fig-correlacao
+#| fig-cap: "Matriz de correlação de Pearson entre as variáveis numéricas."
+#| fig-width: 7
+#| fig-height: 6
+
+correlacao = dados_modelo[preditores_modelo_inicial + ["Apps"]].corr()
+
+plt.figure(figsize=(8,6))
+
+sns.heatmap(
+    correlacao,
+    cmap="RdBu_r",
+    center=0,
+    annot=True,
+    annot_kws={"size": 7},
+    fmt=".2f",
+    linewidths=0.2,
+    square=True,
+    cbar_kws={"label": "Correlação"}
+)
+
+plt.xticks(rotation=45, ha="right")
+plt.yticks(rotation=0)
+plt.tight_layout()
+plt.show()
+```
+
+A Figura 5 apresenta a matriz de correlação de Pearson entre as variáveis do modelo inicial. 
+Observam-se correlações elevadas entre variáveis relacionadas ao processo de admissão, ao porte institucional e ao perfil acadêmico das universidades. 
+Destacam-se as associações entre Accept e Enroll ($r=0,91$), Enroll e F.Undergrad ($r=0,96$), Accept e F.Undergrad ($r=0,87$), Top10perc e Top25perc ($r=0,89$), 
+além de PhD e Terminal ($r=0,85$). Também se observa forte correlação entre Apps e Accept ($r=0,94$), resultado esperado, uma vez que universidades que recebem mais 
+candidaturas tendem a aceitar maior número de estudantes. Esses padrões sugerem a possibilidade de multicolinearidade entre alguns preditores, 
+justificando sua avaliação formal por meio do Fator de Inflação da Variância (VIF).
+
+Fator de Inflação da Variância (VIF)
+
+Para complementar a análise da matriz de correlação, calculou-se o Fator de Inflação da Variância (VIF)
+para cada preditor do modelo inicial. O VIF mede o quanto a variância do estimador de um coeficiente é
+inflacionada em decorrência da dependência linear entre as variáveis explicativas. Como referência
+, valores superiores a 5 indicam multicolinearidade moderada, enquanto valores acima de 10 são usualmente
+considerados evidência de multicolinearidade severa.
+
+```{python}
+#| label: tbl-vif
+#| tbl-cap: "Fator de Inflação da Variância (VIF) para os preditores do modelo inicial."
+
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+
+X_vif = sm.add_constant(dados_modelo[preditores_modelo_inicial])
+
+vif = pd.DataFrame({
+    "Variável": X_vif.columns,
+    "VIF": [
+        variance_inflation_factor(X_vif.values, i)
+        for i in range(X_vif.shape[1])
+    ]
+})
+
+vif = (
+    vif.query("Variável != 'const'")
+       .sort_values("VIF", ascending=False)
+       .reset_index(drop=True)
+)
+
+vif["VIF"] = vif["VIF"].map(lambda x: numero_br(x, 2))
+
+tabela(vif)
+```
+A Tabela 8 apresenta os fatores de inflação da variância (VIF) dos preditores do modelo inicial. 
+Os maiores valores foram observados para Enroll (VIF = 21,37) e F.Undergrad (VIF = 18,02), 
+ambos superiores ao limite de referência igual a 10, indicando multicolinearidade severa. 
+Esses resultados são consistentes com a matriz de correlação, na qual essas variáveis apresentam 
+elevada associação entre si ($r = 0,96$) e também com Accept ($r = 0,91$ e $r = 0,87$, respectivamente).
+
+Também foram observados valores relativamente elevados para Accept (7,14), Top10perc (6,93) e 
+Top25perc (5,63). Embora inferiores ao limite de 10, esses resultados sugerem correlação moderada 
+entre esses preditores, o que pode aumentar a variabilidade das estimativas dos coeficientes.
+
+Os demais preditores apresentaram valores de VIF inferiores a 5, indicando ausência de problemas 
+relevantes de multicolinearidade. Em conjunto, os resultados mostram que a principal fonte de colinearidade 
+do modelo está associada às variáveis que representam diferentes dimensões do porte institucional e do processo de admissão.
+
+Dessa forma, a seleção do modelo final deverá considerar não apenas critérios de ajuste, como AIC e 
+BIC, mas também a redução da multicolinearidade, buscando um modelo mais parcimonioso e com coeficientes mais estáveis.
 
 # Seleção do modelo final
 
-Esta seção comparará modelos candidatos e justificará a escolha da especificação final.
+## Seleção dos modelos
+
+Embora o modelo inicial apresente elevado poder explicativo, 
+ele contém um número relativamente grande de preditores, alguns dos 
+quais apresentam multicolinearidade elevada. Assim, buscou-se uma 
+especificação mais parcimoniosa, capaz de manter o desempenho preditivo 
+ao mesmo tempo em que reduz a complexidade do modelo.
+
+Para isso, foram comparados diferentes modelos utilizando critérios estatísticos 
+de seleção, incluindo o Critério de Informação de Akaike (AIC), o Critério de 
+Informação Bayesiano (BIC), o coeficiente de determinação ajustado ($R^2_{aj}$) e 
+o procedimento de eliminação retroativa (backward). Posteriormente, os modelos 
+foram avaliados por validação cruzada K-Fold.
+
+```{python}
+#| label: tbl-comparacao-modelos
+#| tbl-cap: "Comparação dos modelos obtidos pelos diferentes critérios de seleção."
+
+from statsmodels.api import OLS, add_constant
+
+def resumo_modelo(nome, modelo):
+    return {
+        "Modelo": nome,
+        "Variáveis": len(modelo.params) - 1,
+        "AIC": modelo.aic,
+        "BIC": modelo.bic,
+        "$R^2$": modelo.rsquared,
+        "$R^2_{\\text{ajustado}}$": modelo.rsquared_adj,
+    }
+
+
+def backward_selection(dados, resposta, candidatos):
+    variaveis = candidatos.copy()
+    while True:
+        X = add_constant(dados[variaveis], has_constant="add")
+        y = dados[resposta]
+        modelo = OLS(y, X).fit()
+        pvalores = modelo.pvalues.drop("const")
+        maior_p = pvalores.max()
+
+        if maior_p > 0.05:
+            remover = pvalores.idxmax()
+            variaveis.remove(remover)
+        else:
+            break
+
+    return modelo, variaveis
+
+
+def stepwise_selection(dados, resposta, candidatos, criterio="aic"):
+    restantes = candidatos.copy()
+    selecionadas = []
+    melhor_modelo = None
+    melhor_valor = np.inf
+
+    while restantes:
+        candidatos_iteracao = []
+        for variavel in restantes:
+            variaveis = selecionadas + [variavel]
+            X = add_constant(dados[variaveis], has_constant="add")
+            y = dados[resposta]
+            modelo = OLS(y, X).fit()
+            valor = modelo.aic if criterio == "aic" else modelo.bic
+            candidatos_iteracao.append((valor, variavel, modelo))
+
+        candidatos_iteracao.sort(key=lambda x: x[0])
+        valor, variavel, modelo = candidatos_iteracao[0]
+
+        if valor < melhor_valor:
+            melhor_valor = valor
+            melhor_modelo = modelo
+            selecionadas.append(variavel)
+            restantes.remove(variavel)
+        else:
+            break
+
+    return melhor_modelo, selecionadas
+
+
+modelo_completo = modelo_inicial
+
+modelo_backward, variaveis_backward = backward_selection(
+    dados_modelo,
+    "Apps",
+    preditores_modelo_inicial,
+)
+
+modelo_aic, variaveis_aic = stepwise_selection(
+    dados_modelo,
+    "Apps",
+    preditores_modelo_inicial,
+    criterio="aic",
+)
+
+modelo_bic, variaveis_bic = stepwise_selection(
+    dados_modelo,
+    "Apps",
+    preditores_modelo_inicial,
+    criterio="bic",
+)
+
+comparacao = pd.DataFrame([
+    resumo_modelo("Completo", modelo_completo),
+    resumo_modelo("Backward", modelo_backward),
+    resumo_modelo("AIC", modelo_aic),
+    resumo_modelo("BIC", modelo_bic),
+])
+
+for coluna in ["AIC", "BIC", "$R^2$", "$R^2_{\\text{ajustado}}$"]:
+    comparacao[coluna] = comparacao[coluna].map(lambda x: numero_br(x, 3))
+
+tabela(comparacao)
+```
+
+A @tbl-comparacao-modelos sintetiza as métricas de ajuste para as quatro 
+especificações avaliadas. O modelo Completo (17 preditores) apresenta AIC de $13.020,429$, 
+enquanto o procedimento de eliminação retroativa (Backward) reduz o conjunto 
+para $11$ preditores com AIC de $13.012,670$. O procedimento Stepwise (AIC) retém $12$ variáveis, 
+ao passo que o Stepwise (BIC) seleciona uma estrutura mais concisa contendo $10$ preditores. O modelo parcimonioso obtido 
+pelo critério BIC penaliza com maior rigor a inclusão de parâmetros adicionais, 
+alcançando $13.067,218$ no BIC e $R^2_{\text{ajustado}} = 0,927$. A perda no coeficiente 
+de determinação ajustado é inferior a $0,1\%$ em relação ao modelo completo ($0,928$), com 
+a vantagem decisiva de eliminar a variável F.Undergrad, principal fonte de multicolinearidade severa ($\text{VIF} = 18,02$).
 
 # Validação cruzada K-Fold
 
