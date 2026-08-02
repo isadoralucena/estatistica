@@ -522,20 +522,18 @@ plt.tight_layout()
 plt.show()
 ```
 
-A Figura 5 apresenta a matriz de correlação de Pearson entre as variáveis do modelo inicial. 
-Observam-se correlações elevadas entre variáveis relacionadas ao processo de admissão, ao porte institucional e ao perfil acadêmico das universidades. 
-Destacam-se as associações entre Accept e Enroll ($r=0,91$), Enroll e F.Undergrad ($r=0,96$), Accept e F.Undergrad ($r=0,87$), Top10perc e Top25perc ($r=0,89$), 
-além de PhD e Terminal ($r=0,85$). Também se observa forte correlação entre Apps e Accept ($r=0,94$), resultado esperado, uma vez que universidades que recebem mais 
-candidaturas tendem a aceitar maior número de estudantes. Esses padrões sugerem a possibilidade de multicolinearidade entre alguns preditores, 
-justificando sua avaliação formal por meio do Fator de Inflação da Variância (VIF).
+Observam-se correlações elevadas entre variáveis de admissão, porte institucional e perfil
+acadêmico, com destaque para Accept–Enroll ($r=0,91$), Enroll–F.Undergrad ($r=0,96$),
+Accept–F.Undergrad ($r=0,87$), Top10perc–Top25perc ($r=0,89$) e PhD–Terminal ($r=0,85$). A forte
+correlação entre Apps e Accept ($r=0,94$) é esperada, pois instituições que recebem mais
+candidaturas tendem a aceitar mais estudantes. Esses padrões motivam a avaliação formal da
+multicolinearidade por meio do VIF.
 
 Fator de Inflação da Variância (VIF)
 
-Para complementar a análise da matriz de correlação, calculou-se o Fator de Inflação da Variância (VIF)
-para cada preditor do modelo inicial. O VIF mede o quanto a variância do estimador de um coeficiente é
-inflacionada em decorrência da dependência linear entre as variáveis explicativas. Como referência
-, valores superiores a 5 indicam multicolinearidade moderada, enquanto valores acima de 10 são usualmente
-considerados evidência de multicolinearidade severa.
+Complementando a matriz de correlação, calculou-se o VIF de cada preditor do modelo inicial,
+adotando-se VIF > 5 como indício de multicolinearidade moderada e VIF > 10 como evidência de
+multicolinearidade severa.
 
 ```{python}
 #| label: tbl-vif
@@ -563,38 +561,21 @@ vif["VIF"] = vif["VIF"].map(lambda x: numero_br(x, 2))
 
 tabela(vif)
 ```
-A Tabela 8 apresenta os fatores de inflação da variância (VIF) dos preditores do modelo inicial. 
-Os maiores valores foram observados para Enroll (VIF = 21,37) e F.Undergrad (VIF = 18,02), 
-ambos superiores ao limite de referência igual a 10, indicando multicolinearidade severa. 
-Esses resultados são consistentes com a matriz de correlação, na qual essas variáveis apresentam 
-elevada associação entre si ($r = 0,96$) e também com Accept ($r = 0,91$ e $r = 0,87$, respectivamente).
-
-Também foram observados valores relativamente elevados para Accept (7,14), Top10perc (6,93) e 
-Top25perc (5,63). Embora inferiores ao limite de 10, esses resultados sugerem correlação moderada 
-entre esses preditores, o que pode aumentar a variabilidade das estimativas dos coeficientes.
-
-Os demais preditores apresentaram valores de VIF inferiores a 5, indicando ausência de problemas 
-relevantes de multicolinearidade. Em conjunto, os resultados mostram que a principal fonte de colinearidade 
-do modelo está associada às variáveis que representam diferentes dimensões do porte institucional e do processo de admissão.
-
-Dessa forma, a seleção do modelo final deverá considerar não apenas critérios de ajuste, como AIC e 
-BIC, mas também a redução da multicolinearidade, buscando um modelo mais parcimonioso e com coeficientes mais estáveis.
+A @tbl-vif confirma multicolinearidade severa em `Enroll` (VIF = 21,37) e `F.Undergrad`
+(VIF = 18,02), coerente com a forte correlação entre essas variáveis e com `Accept` observada na
+@fig-correlacao. `Accept`, `Top10perc` e `Top25perc` apresentam VIFs moderados (entre 5 e 7); os
+demais preditores ficam abaixo de 5. A principal fonte de colinearidade está, portanto,
+associada às variáveis de porte institucional e de admissão, o que orienta a seleção do modelo
+final a considerar, além de AIC e BIC, também a redução da multicolinearidade.
 
 # Seleção do modelo final
 
 ## Seleção dos modelos
 
-Embora o modelo inicial apresente elevado poder explicativo, 
-ele contém um número relativamente grande de preditores, alguns dos 
-quais apresentam multicolinearidade elevada. Assim, buscou-se uma 
-especificação mais parcimoniosa, capaz de manter o desempenho preditivo 
-ao mesmo tempo em que reduz a complexidade do modelo.
-
-Para isso, foram comparados diferentes modelos utilizando critérios estatísticos 
-de seleção, incluindo o Critério de Informação de Akaike (AIC), o Critério de 
-Informação Bayesiano (BIC), o coeficiente de determinação ajustado ($R^2_{aj}$) e 
-o procedimento de eliminação retroativa (backward). Posteriormente, os modelos 
-foram avaliados por validação cruzada K-Fold.
+O modelo inicial, apesar do elevado poder explicativo, reúne um número grande de preditores e
+apresenta multicolinearidade elevada. Buscou-se, assim, uma especificação mais parcimoniosa por
+meio de critérios de seleção — AIC, BIC, $R^2_{aj}$ e eliminação retroativa (backward) —, com
+desempenho preditivo avaliado posteriormente por validação cruzada K-Fold.
 
 ```{python}
 #| label: tbl-comparacao-modelos
@@ -696,21 +677,16 @@ for coluna in ["AIC", "BIC", "$R^2$", "$R^2_{\\text{ajustado}}$"]:
 tabela(comparacao)
 ```
 
-A @tbl-comparacao-modelos sintetiza as métricas de ajuste para as quatro 
-especificações avaliadas. O modelo Completo (17 preditores) apresenta AIC de $13.020,429$, 
-enquanto o procedimento de eliminação retroativa (Backward) reduz o conjunto 
-para $11$ preditores com AIC de $13.012,670$. O procedimento Stepwise (AIC) retém $12$ variáveis, 
-ao passo que o Stepwise (BIC) seleciona uma estrutura mais concisa contendo $10$ preditores. O modelo parcimonioso obtido 
-pelo critério BIC penaliza com maior rigor a inclusão de parâmetros adicionais, 
-alcançando $13.067,218$ no BIC e $R^2_{\text{ajustado}} = 0,927$. A perda no coeficiente 
-de determinação ajustado é inferior a $0,1\%$ em relação ao modelo completo ($0,928$), com 
-a vantagem decisiva de eliminar a variável F.Undergrad, principal fonte de multicolinearidade severa ($\text{VIF} = 18,02$).
+A @tbl-comparacao-modelos mostra que o modelo Completo (17 preditores) tem o maior AIC
+($13.020,429$); Backward (11 preditores) e Stepwise (AIC) (12 preditores) obtêm os menores AIC,
+em torno de $13.012,6$; e o Stepwise (BIC) (10 preditores) tem o menor BIC ($13.067,218$) e
+$R^2_{\text{ajustado}} = 0,927$ — apenas $0,1$ p.p. abaixo do modelo Completo ($0,928$) —, com a
+vantagem de eliminar `F.Undergrad`, principal fonte de multicolinearidade severa ($\text{VIF} = 18,02$).
 
 ## Modelo final selecionado
 
-Para definir o modelo final, além dos critérios de ajuste apresentados
-anteriormente, a multicolinearidade dos modelos selecionados também foi
-reavaliada por meio do Fator de Inflação da Variância (VIF).
+Para decidir entre as especificações, a multicolinearidade de cada uma foi reavaliada por meio
+do maior VIF (@tbl-vif-final).
 
 ```{python}
 #| label: tbl-vif-final
@@ -750,60 +726,36 @@ vif_final_max["Maior VIF"] = (
 tabela(vif_final_max)
 ```
 
-A @tbl-vif-final mostra que os modelos **Backward** e **Stepwise (AIC)**
-mantêm simultaneamente as variáveis `Enroll` e `F.Undergrad`, preservando a
-multicolinearidade severa observada no modelo completo. Em ambos os casos, os
-maiores VIFs permanecem próximos de 21 e 17, respectivamente. Já no modelo
-**Stepwise (BIC)**, a remoção de `F.Undergrad` reduz o maior VIF do conjunto
-(`Enroll`) para aproximadamente **7,6**, valor inferior ao limite de
-referência igual a 10. Embora ainda exista alguma correlação entre as
-variáveis explicativas, a multicolinearidade deixa de ser considerada severa.
+Backward e Stepwise (AIC) mantêm simultaneamente `Enroll` e `F.Undergrad`, preservando VIFs de
+cerca de 21 e 17; no Stepwise (BIC), a exclusão de `F.Undergrad` reduz o maior VIF (`Enroll`)
+para aproximadamente **7,6**, abaixo do limite de referência igual a 10. O modelo **Stepwise
+(BIC)** — com 10 preditores (`Accept`, `Enroll`, `Top10perc`, `Top25perc`, `Outstate`,
+`Room.Board`, `PhD`, `Expend`, `Grad.Rate` e `Private_Yes`) — foi por isso escolhido como modelo
+final, pelo melhor equilíbrio entre qualidade do ajuste, parcimônia e estabilidade dos
+coeficientes.
 
-Diante desses resultados, o modelo **Stepwise (BIC)** foi escolhido como
-modelo final. Esse modelo possui 10 variáveis explicativas (`Accept`,
-`Enroll`, `Top10perc`, `Top25perc`, `Outstate`, `Room.Board`, `PhD`,
-`Expend`, `Grad.Rate` e `Private_Yes`) e apresentou o melhor equilíbrio entre
-qualidade do ajuste, simplicidade e estabilidade dos coeficientes.
+A escolha apoia-se em três fatores: (i) é o mais parcimonioso, com perda desprezível de
+$R^2_{\text{ajustado}}$ (**0,927** contra **0,928** nos demais); (ii) é o único que elimina a
+multicolinearidade severa, com todos os VIFs abaixo de 10; e (iii) apesar do AIC levemente
+superior ao de Backward e Stepwise (AIC) (diferença inferior a quatro unidades), apresenta o
+menor BIC entre as quatro especificações — critério que penaliza mais fortemente o excesso de
+parâmetros e favorece modelos mais simples sem comprometer o ajuste.
 
-A escolha baseia-se em três fatores principais. Primeiro, o modelo é o mais
-parcimonioso entre os avaliados e apresenta perda praticamente desprezível de
-capacidade explicativa. Seu \(R^2\) ajustado é igual a **0,927**, apenas
-**0,001** inferior ao obtido pelos modelos Completo, Backward e Stepwise
-(AIC), todos com \(R^2\) ajustado igual a **0,928**. Segundo, é o único
-modelo que elimina a multicolinearidade severa identificada no modelo
-inicial, reduzindo todos os VIFs para valores inferiores a 10. Por fim,
-embora seu AIC seja ligeiramente superior ao dos modelos Backward e Stepwise
-(AIC), a diferença é inferior a quatro unidades e considerada pequena. Em
-contrapartida, esse modelo apresenta o menor BIC entre todas as
-especificações avaliadas. Como o BIC penaliza de forma mais intensa a
-inclusão de parâmetros desnecessários, ele favorece modelos mais simples sem
-comprometer a qualidade do ajuste.
+Os demais modelos não foram selecionados pelos seguintes motivos: o **Completo** mantém as 17
+variáveis originais, incluindo preditores sem significância estatística (`Books`, `Personal`,
+`Terminal`, `perc.alumni`, `F.Undergrad` e `P.Undergrad`) e a colinearidade severa entre `Enroll`
+e `F.Undergrad`; o **Backward** remove os preditores não significativos, mas preserva
+`F.Undergrad`; e o **Stepwise (AIC)**, apesar do menor AIC entre os quatro, mantém `F.Undergrad`
+e `P.Undergrad`, sem eliminar a principal fonte de instabilidade dos coeficientes.
 
-Os demais modelos não foram selecionados pelos seguintes motivos. O modelo
-**Completo** mantém todas as 17 variáveis explicativas, incluindo preditores
-sem significância estatística (`Books`, `Personal`, `Terminal`,
-`perc.alumni`, `F.Undergrad` e `P.Undergrad`), além da forte
-multicolinearidade entre `Enroll` e `F.Undergrad`. O modelo **Backward**
-elimina parte dessas variáveis, porém mantém `F.Undergrad`, preservando o
-problema de colinearidade. Já o modelo **Stepwise (AIC)** apresenta o menor
-AIC entre os modelos comparados, mas continua incluindo `F.Undergrad` e
-`P.Undergrad`, tornando o modelo mais complexo sem eliminar a principal fonte
-de instabilidade dos coeficientes.
+Vale registrar uma limitação comum às quatro especificações: `Accept` e `Enroll` são etapas
+posteriores ao recebimento das candidaturas, não características institucionais prévias, o que
+restringe uma leitura estritamente causal do modelo — mas, por ser comum a todas as
+especificações, não influenciou a seleção entre elas.
 
-É importante destacar uma limitação presente em todas as especificações
-avaliadas. As variáveis `Accept` e `Enroll` representam etapas posteriores ao
-recebimento das candidaturas (`Apps`), correspondendo ao número de candidatos
-aceitos e ao número de alunos efetivamente matriculados. Dessa forma, essas
-variáveis não representam características institucionais anteriores ao
-processo de candidatura, limitando uma interpretação estritamente causal do
-modelo. Entretanto, como essa característica está presente em todos os
-modelos comparados, ela não interfere na escolha entre eles e, por isso, não
-foi utilizada como critério de seleção.
-
-Assim, o modelo **Stepwise (BIC)** foi adotado como modelo final deste
-trabalho e será utilizado nas próximas etapas da análise, incluindo a
-validação cruzada, a interpretação dos coeficientes, o diagnóstico dos
-pressupostos e a realização das previsões.
+Assim, o modelo **Stepwise (BIC)** é adotado como modelo final e utilizado nas próximas etapas
+da análise: validação cruzada, interpretação dos coeficientes, diagnóstico dos pressupostos e
+previsões.
 
 # Validação cruzada K-Fold
 
@@ -818,11 +770,9 @@ n_final = X_final.shape[0]
 p_final = X_final.shape[1]
 ```
 
-Para avaliar a capacidade preditiva do modelo final fora da amostra utilizada em seu ajuste,
-foi realizada uma validação cruzada K-Fold com $K=10$ partições, aplicada exclusivamente ao
-modelo Stepwise (BIC). Em cada iteração, o modelo foi reajustado com nove das dez partições e
-avaliado na partição restante, sendo calculados a raiz do erro quadrático médio (RMSE), o erro
-absoluto médio (MAE) e o coeficiente de determinação ($R^2$) na partição de teste.
+Para avaliar a capacidade preditiva do modelo final fora da amostra de ajuste, realizou-se
+validação cruzada K-Fold com $K=10$ partições. Em cada iteração, o modelo foi reajustado com
+nove partições e avaliado na restante, calculando-se RMSE, MAE e $R^2$ na partição de teste.
 
 ```{python}
 #| label: tbl-kfold
@@ -876,21 +826,13 @@ for coluna in ["RMSE", "MAE", "$R^2$"]:
 tabela(kfold_resumo)
 ```
 
-A @tbl-kfold mostra que o RMSE médio nas dez partições de teste é de aproximadamente
-$1.086,47$ candidaturas, com desvio-padrão de $331,36$, enquanto o $R^2$ médio é de $0,911$,
-com desvio-padrão de $0,034$. Esses valores são próximos dos obtidos dentro da própria amostra
-de ajuste, na qual o modelo final apresenta $R^2_{\text{ajustado}} = 0,927$ e RMSE de
-aproximadamente $1.042,99$. A proximidade entre o desempenho estimado por validação cruzada e
-o desempenho dentro da amostra indica que o modelo generaliza razoavelmente bem para dados não
-utilizados em seu ajuste, sem sinais de sobreajuste severo.
-
-Observa-se, ainda, alguma variabilidade entre partições: a partição 5 apresenta o maior RMSE
-($1.641,29$), o que é consistente com o fato de essa partição conter, no conjunto de teste, a
-observação 484, identificada desde a análise exploratória (@tbl-extremos) como a instituição
-com o maior número de candidaturas da base (48.094). Já a partição 3 apresenta o menor $R^2$
-($0,830$), refletindo a sensibilidade do modelo à composição de cada partição em uma base com
-forte assimetria na variável resposta. Essa oscilação motiva a investigação mais detalhada de
-observações influentes, retomada na seção de diagnóstico.
+O desempenho médio nas partições de teste (@tbl-kfold) é próximo do obtido dentro da amostra de
+ajuste ($R^2_{\text{ajustado}} = 0,927$; RMSE $\approx 1.042,99$), indicando boa capacidade de
+generalização e ausência de sobreajuste severo. A maior variabilidade ocorre na partição 5
+(maior RMSE), que contém no conjunto de teste a observação 484 — a instituição com o maior
+número de candidaturas da base, já identificada na @tbl-extremos —, e na partição 3 (menor
+$R^2$), refletindo a sensibilidade do modelo a observações extremas, retomada na seção de
+diagnóstico.
 
 # Interpretação dos coeficientes
 
@@ -924,44 +866,28 @@ coeficientes_finais["p-valor"] = coeficientes_finais["p-valor"].map(pvalor_br)
 tabela(coeficientes_finais)
 ```
 
-Todos os dez preditores do modelo final apresentam coeficientes estatisticamente significativos
-ao nível de 5%, o que já era esperado, uma vez que o critério BIC penaliza fortemente variáveis
-com pouca contribuição marginal. O $R^2_{\text{ajustado}}$ de 0,927 indica que o modelo explica
-92,7% da variação amostral de `Apps` com praticamente a mesma capacidade explicativa do modelo
-completo, porém com sete preditores a menos.
+Todos os dez preditores são significativos a 5%, resultado esperado do critério BIC. O
+$R^2_{\text{ajustado}}$ de 0,927 mantém praticamente a capacidade explicativa do modelo completo,
+com sete preditores a menos.
 
-`Accept` é o preditor de maior efeito prático: mantidos os demais preditores constantes, cada
-candidatura aceita adicional está associada, em média, a um acréscimo de aproximadamente 1,58
-candidatura recebida, refletindo a forte relação estrutural entre aceitação e demanda observada
-desde a análise de correlação ($r = 0,94$ entre `Apps` e `Accept`). O percentual de ingressantes
-no top 10% da turma (`Top10perc`) também apresenta associação positiva expressiva: cada ponto
-percentual adicional está associado a cerca de 49 candidaturas a mais, consistente com a leitura
-de que instituições mais seletivas e prestigiadas atraem maior número de candidatos. Na mesma
-direção, `Room.Board` e `Expend` apresentam coeficientes positivos, sugerindo que maiores
-investimentos em infraestrutura de moradia/alimentação e gasto institucional por aluno estão
-associados a maior atratividade. `Grad.Rate` também contribui positivamente, compatível com a
-ideia de que taxas de graduação mais altas sinalizam melhor desempenho institucional.
+`Accept` tem o maior efeito prático: cada candidatura aceita a mais associa-se, em média, a
++1,58 candidatura recebida (mantidos os demais preditores constantes), refletindo a forte
+relação `Apps`–`Accept` já vista na correlação ($r=0,94$). `Top10perc` também tem efeito
+expressivo (+49 candidaturas por ponto percentual), consistente com maior seletividade atraindo
+mais candidatos. `Room.Board`, `Expend` e `Grad.Rate` têm coeficientes positivos, associando
+maior investimento institucional e taxa de graduação a maior atratividade.
 
-Outros coeficientes têm sinal negativo e mensagem mais sutil. `Outstate` é negativo, indicando
-que, mantidos os demais fatores constantes, mensalidades mais altas para estudantes de fora do
-estado estão associadas a menor número de candidaturas — um efeito de custo, coerente com a
-intuição econômica. O coeficiente de `Private_Yes` reforça o resultado já observado no modelo
-inicial: instituições privadas recebem, em média, cerca de 575 candidaturas a menos que
-instituições públicas com as demais características equivalentes, o que é coerente com a
-diferença de porte entre os dois grupos discutida na análise exploratória (@tbl-resumo-private).
+`Outstate` é negativo — mensalidades mais altas associam-se a menos candidaturas, efeito de
+custo esperado. `Private_Yes` confirma o resultado do modelo inicial: instituições privadas
+recebem, em média, cerca de 575 candidaturas a menos que as públicas com as demais
+características equivalentes, coerente com a diferença de porte já discutida na
+@tbl-resumo-private.
 
-Três coeficientes merecem leitura mais cuidadosa por apresentarem sinal oposto ao da correlação
-bivariada com `Apps` observada na @fig-correlacao (seção de correlação e multicolinearidade):
-`Enroll`, `Top25perc` e `PhD` são positivamente correlacionados com `Apps` isoladamente
-($r = 0,85$; $r = 0,35$; e $r = 0,39$, respectivamente), mas seus coeficientes parciais no
-modelo final são negativos. Esse padrão é uma consequência esperada da correlação entre
-preditores: `Enroll` está fortemente associado a `Accept` ($r = 0,91$), `Top25perc` está
-fortemente associado a `Top10perc` ($r = 0,89$) e `PhD` está associado a `Terminal` e a outras
-variáveis de perfil acadêmico. Uma vez que `Accept` e `Top10perc` já capturam grande parte da
-variação relacionada à demanda e à seletividade, os coeficientes de `Enroll`, `Top25perc` e
-`PhD` passam a representar o efeito marginal residual dessas variáveis, condicional às demais —
-e não devem ser interpretados como relações de causa e efeito isoladas, mas sim como associações
-parciais dentro do conjunto de preditores do modelo.
+`Enroll`, `Top25perc` e `PhD` têm coeficiente parcial negativo apesar de correlação bivariada
+positiva com `Apps` (@fig-correlacao). Isso decorre da forte correlação com `Accept`, `Top10perc`
+e `Terminal`, respectivamente: como essas variáveis já capturam grande parte da seletividade e
+da demanda, os coeficientes remanescentes representam apenas o efeito marginal residual, e não
+devem ser lidos como relações de causa e efeito isoladas.
 
 # Diagnóstico do modelo
 
@@ -1019,25 +945,14 @@ bp_tabela = pd.DataFrame([{
 tabela(bp_tabela)
 ```
 
-A @fig-diagnostico-residuos evidencia um padrão de leque (*funnel shape*) no gráfico de
-resíduos versus valores ajustados: a dispersão dos resíduos aumenta com o valor previsto de
-`Apps`, sugerindo variância não constante. O gráfico de escala-localização confirma essa
-tendência, com a magnitude dos resíduos padronizados crescendo à medida que os valores ajustados
-aumentam. O teste formal de Breusch-Pagan (@tbl-breusch-pagan) rejeita a hipótese nula de
-homocedasticidade a qualquer nível usual de significância, confirmando estatisticamente a
-heterocedasticidade sugerida pelos gráficos.
-
-Esse resultado é esperado dado o forte caráter assimétrico de `Apps`, já identificado na análise
-exploratória (assimetria amostral de 3,72; @fig-distribuicao-apps): instituições com maior
-volume de candidaturas tendem a apresentar também maior variabilidade absoluta nesse volume. A
-heterocedasticidade não invalida as estimativas pontuais dos coeficientes, que permanecem não
-viesadas, mas compromete a eficiência dos erros-padrão clássicos e, por consequência, a precisão
-exata dos testes de hipótese e dos intervalos construídos na seção de previsões, que devem ser
-interpretados com essa ressalva.
-
-Em conjunto, os diagnósticos indicam que o modelo atende razoavelmente aos pressupostos da regressão linear múltipla. 
-Embora existam pequenas violações, principalmente relacionadas à normalidade dos resíduos nas caudas, elas não comprometem 
-significativamente as inferências devido ao tamanho da amostra.
+A @fig-diagnostico-residuos evidencia um padrão de leque: a dispersão dos resíduos cresce com o
+valor ajustado de `Apps`, indicando variância não constante — confirmado pelo teste de
+Breusch-Pagan (@tbl-breusch-pagan), que rejeita a homocedasticidade a qualquer nível usual de
+significância. O resultado é esperado dada a forte assimetria de `Apps` (assimetria amostral de
+3,72; @fig-distribuicao-apps): instituições com mais candidaturas tendem a apresentar também
+maior variabilidade absoluta. A heterocedasticidade não viesa as estimativas pontuais dos
+coeficientes, mas reduz a eficiência dos erros-padrão clássicos, o que deve ser considerado na
+leitura dos intervalos construídos na seção de previsões.
 
 # QQ Plot e normalidade dos resíduos
 
@@ -1063,15 +978,14 @@ fig.tight_layout()
 plt.show()
 ```
 
-O QQ-plot mostra afastamento sistemático da reta de referência normal nas duas caudas,
-sobretudo na cauda superior, onde os resíduos observados assumem valores muito mais extremos do
-que o esperado sob normalidade — reflexo direto de instituições com candidaturas atipicamente
-elevadas, como a observação 484.
+O QQ-plot mostra afastamento sistemático da reta normal nas duas caudas, sobretudo na superior,
+onde os resíduos assumem valores muito mais extremos que o esperado sob normalidade — reflexo de
+instituições com candidaturas atipicamente elevadas, como a observação 484.
 
-Para complementar a avaliação visual, foi construído um gráfico de envelope simulado: a partir
-do modelo ajustado, foram geradas 100 réplicas da variável resposta sob a hipótese de erros
-normais com a mesma matriz de preditores, obtendo-se, para cada posição ordenada dos resíduos
-estudentizados, uma banda de referência entre os percentis 2,5% e 97,5% das réplicas simuladas.
+Para complementar a avaliação visual, construiu-se um envelope simulado: a partir do modelo
+ajustado, geraram-se 100 réplicas da resposta sob a hipótese de erros normais com a mesma matriz
+de preditores, obtendo-se, para cada posição ordenada dos resíduos, uma banda de referência entre
+os percentis 2,5% e 97,5% das réplicas.
 
 ```{python}
 #| label: fig-envelope
@@ -1145,22 +1059,18 @@ normalidade_tabela = pd.DataFrame([{
 tabela(normalidade_tabela)
 ```
 
-A @tbl-shapiro resume a avaliação formal de normalidade. O teste de Shapiro-Wilk rejeita a
-hipótese de normalidade dos resíduos ($p < 0,001$), e as medidas de assimetria (2,36) e curtose
-(15,98) indicam uma distribuição fortemente assimétrica à direita e com caudas muito mais pesadas
-que as da distribuição normal. O gráfico de envelope simulado (@fig-envelope) corrobora essa
-conclusão de forma visual: a maior parte dos resíduos observados situa-se fora da banda de 95%
-esperada sob normalidade, sobretudo por estarem mais concentrados próximo de zero do que o
-previsto pelo modelo normal e por apresentarem valores extremos nas caudas muito além do
-envelope — configuração típica de distribuições leptocúrticas.
+A @tbl-shapiro resume a avaliação formal: o teste de Shapiro-Wilk rejeita a normalidade dos
+resíduos ($p < 0,001$), e a assimetria e a curtose confirmam uma distribuição fortemente
+assimétrica à direita e de caudas pesadas. O envelope simulado (@fig-envelope) corrobora essa
+conclusão visualmente: a maior parte dos resíduos observados fica fora da banda de 95%, mais
+concentrados próximo de zero e com caudas muito além do esperado sob normalidade — padrão
+típico de distribuições leptocúrticas.
 
-Em conjunto, os resultados desta seção e da anterior indicam que dois pressupostos clássicos do
-MRLM — homocedasticidade e normalidade dos resíduos — não são plenamente satisfeitos pelo modelo
-final. Essa violação está associada principalmente à forte assimetria de `Apps` e a um pequeno
-número de observações extremas, investigadas formalmente na próxima seção. Como o escopo deste
-trabalho é a comparação e o diagnóstico dos modelos já ajustados, e não a proposição de uma nova
-especificação, o modelo Stepwise (BIC) é mantido como modelo final; a violação identificada é
-registrada como limitação a ser considerada na leitura de testes de hipótese e intervalos.
+Os resultados desta seção e da anterior indicam que homocedasticidade e normalidade não são
+plenamente satisfeitas, sobretudo pela forte assimetria de `Apps` e por um pequeno número de
+observações extremas, investigadas na próxima seção. Como o objetivo é diagnosticar — não
+reajustar — o modelo já selecionado, o Stepwise (BIC) é mantido como final, registrando-se essa
+violação como limitação a considerar na leitura de testes e intervalos.
 
 # Pontos atípicos, de alavanca e influentes
 
@@ -1243,39 +1153,29 @@ for coluna in ["Alavancagem", "Resíduo estudentizado", "Distância de Cook"]:
 tabela(tabela_influentes)
 ```
 
-Com os limites de referência adotados, 48 observações excedem o limite de alavancagem, 46
-excedem o limite da distância de Cook e 18 são classificadas como atípicas pelo resíduo
-estudentizado. Esses números, relativamente altos para uma base com 777 observações,
-são esperados quando se aplicam limites de referência clássicos a uma amostra grande com
-resposta fortemente assimétrica; nem todas essas observações representam, necessariamente,
-problemas de ajuste isolados.
+Com os limites de referência adotados, 48 observações excedem o limite de alavancagem, 46 o de
+Cook e 18 são atípicas pelo resíduo estudentizado — números altos, mas esperados ao aplicar
+limites clássicos a uma amostra grande e assimétrica; nem todas representam, necessariamente,
+problemas isolados de ajuste.
 
-Uma leitura mais seletiva considera as observações que excedem simultaneamente os três
-critérios, listadas na @tbl-influencia: apenas 10 instituições atendem a essa condição mais
-restritiva, o que corresponde a cerca de 1,3% da amostra. Entre elas, destaca-se novamente a
-observação 484 — a instituição pública com 48.094 candidaturas já identificada na
-@tbl-extremos —, cuja alavancagem (0,364) é mais de doze vezes o limite de referência
-($2p/n = 0,028$), cuja distância de Cook (4,63) supera em larga margem tanto o limite de
-referência ($4/n = 0,005$) quanto o limite absoluto tradicional igual a 1, e cujo resíduo
-estudentizado (10,03) é, de longe, o mais extremo da base. Essa observação concentra, portanto,
-alavanca, atipicidade e influência de forma simultânea, sendo o ponto isolado de maior impacto
-potencial sobre as estimativas do modelo final.
+Uma leitura mais seletiva, que exige os três critérios simultaneamente (@tbl-influencia), reduz
+a lista a 10 instituições (cerca de 1,3% da amostra). A observação 484 — a mesma instituição
+pública com 48.094 candidaturas já identificada na @tbl-extremos — destaca-se amplamente em
+todos os critérios, sendo o ponto isolado de maior impacto potencial sobre as estimativas do
+modelo final.
 
-Como a proposta deste trabalho é diagnosticar o modelo final já selecionado, e não reajustá-lo,
-nenhuma observação foi removida ou teve tratamento diferenciado nas seções anteriores. O
-registro dessas observações tem caráter diagnóstico: evidencia que uma parcela pequena, porém
-não desprezível, da amostra — sobretudo instituições públicas de grande porte com volume de
-candidaturas muito acima da média — tem peso desproporcional sobre o ajuste, o que é coerente
-com a heterocedasticidade e a não normalidade identificadas nas seções anteriores.
+Como o objetivo é diagnosticar, não reajustar, o modelo já selecionado, nenhuma observação foi
+removida ou tratada de forma diferenciada. O registro tem caráter diagnóstico: uma pequena
+parcela da amostra — sobretudo instituições públicas de grande porte — tem peso desproporcional
+sobre o ajuste, o que é coerente com a heterocedasticidade e a não normalidade já identificadas.
 
 # Previsões
 
 Esta seção ilustra o uso prático do modelo final por meio de dois perfis institucionais
-plausíveis, construídos a partir das medianas observadas dos dez preditores do modelo, separadas
-por natureza da instituição (pública ou privada). Para cada perfil, são apresentados a previsão
-pontual, o intervalo de confiança de 95% para o valor médio esperado da resposta,
-$E(Y \mid \mathbf{X} = \mathbf{x}_0)$, e o intervalo de predição de 95% para uma nova observação
-individual.
+plausíveis, construídos a partir das medianas dos dez preditores do modelo, separadas por
+natureza da instituição. Para cada perfil, apresentam-se a previsão pontual, o intervalo de
+confiança de 95% para $E(Y \mid \mathbf{X} = \mathbf{x}_0)$ e o intervalo de predição de 95%
+para uma nova observação individual.
 
 ```{python}
 #| label: tbl-perfis
@@ -1323,72 +1223,47 @@ for coluna in previsoes_exibicao.columns[1:]:
 tabela(previsoes_exibicao)
 ```
 
-O perfil de instituição **pública** típica (mediana das públicas nos dez preditores do modelo)
-resulta em uma previsão pontual de aproximadamente **4.102** candidaturas, com intervalo de
-confiança de 95% para o número médio esperado de candidaturas entre **3.953,6** e **4.250,6**, e
-intervalo de predição de 95% entre **2.049,3** e **6.154,9** para uma nova instituição com esse
-mesmo perfil. Já o perfil de instituição **privada** típica resulta em uma previsão pontual de
-aproximadamente **1.053** candidaturas, com intervalo de confiança de 95% entre **957,1** e
-**1.148,9**, e intervalo de predição de 95% entre **-996,7** e **3.102,7**.
+A @tbl-previsoes apresenta a previsão pontual e os intervalos de 95% para os dois perfis. Como
+esperado, o intervalo de predição é bem mais largo que o de confiança em ambos os casos, pois
+soma a incerteza sobre a média à variabilidade individual em torno dela. No perfil privado, o
+limite inferior do intervalo de predição é negativo — sem significado prático, já que `Apps`
+não pode ser negativo —, consequência esperada de ajustar um modelo linear não transformado a
+uma resposta assimétrica e heterocedástica (seções de diagnóstico); na prática, esse limite
+equivale a zero candidaturas, e o intervalo deve ser lido com cautela adicional.
 
-Como esperado pela teoria da regressão, o intervalo de predição é substancialmente mais largo
-que o intervalo de confiança em ambos os perfis, pois incorpora tanto a incerteza sobre o valor
-médio quanto a variabilidade individual em torno desse valor. No perfil privado, o limite
-inferior do intervalo de predição é negativo, o que não tem significado prático, já que `Apps`
-não pode ser negativo: esse resultado é uma consequência esperada de ajustar um modelo linear
-não transformado a uma variável de contagem fortemente assimétrica e heterocedástica, como
-discutido nas seções de diagnóstico. Na prática, esse limite deve ser interpretado como
-equivalente a zero candidaturas, e o intervalo de predição deve ser lido com cautela adicional,
-sobretudo para instituições privadas de menor porte.
-
-Ainda assim, os dois perfis reproduzem, de forma coerente, o padrão já descrito na análise
-exploratória (@tbl-resumo-private): instituições públicas recebem, em mediana, número de
-candidaturas várias vezes maior que instituições privadas, mesmo após o controle simultâneo por
-seletividade, custo, perfil acadêmico e investimento institucional promovido pelo modelo de
-regressão múltipla.
+Ainda assim, os dois perfis reproduzem o padrão já descrito na @tbl-resumo-private: instituições
+públicas recebem, em mediana, número de candidaturas várias vezes maior que privadas, mesmo após
+o controle simultâneo por seletividade, custo, perfil acadêmico e investimento institucional.
 
 # Conclusão
 
-Este trabalho aplicou a metodologia de Regressão Linear Múltipla para modelar o número de
-candidaturas (`Apps`) recebidas por instituições de ensino superior dos Estados Unidos,
-utilizando a base `College`. A análise exploratória revelou forte assimetria à direita na
-variável resposta e diferenças marcantes entre instituições públicas e privadas, tanto em porte
-quanto em custo e investimento.
+Este trabalho aplicou a Regressão Linear Múltipla para modelar o número de candidaturas
+(`Apps`) recebidas por instituições de ensino superior dos Estados Unidos, com base na base
+`College`. A análise exploratória revelou forte assimetria à direita na variável resposta e
+diferenças marcantes entre instituições públicas e privadas em porte, custo e investimento.
 
-O modelo inicial, com os 16 preditores numéricos e a variável categórica `Private`, apresentou
-elevado poder explicativo ($R^2_{\text{ajustado}} = 0,928$), mas evidenciou multicolinearidade
-severa entre `Enroll` e `F.Undergrad` (VIF de 21,37 e 18,02, respectivamente). A comparação entre
-quatro especificações — Completo, Backward, Stepwise (AIC) e Stepwise (BIC) — mostrou que apenas
-o modelo Stepwise (BIC) elimina essa multicolinearidade severa, ao custo de uma perda
-praticamente desprezível de capacidade explicativa ($R^2_{\text{ajustado}} = 0,927$), sendo por
-isso adotado como modelo final com dez preditores: `Accept`, `Enroll`, `Top10perc`, `Top25perc`,
-`Outstate`, `Room.Board`, `PhD`, `Expend`, `Grad.Rate` e `Private_Yes`.
+O modelo inicial, com 16 preditores numéricos e `Private`, teve elevado poder explicativo
+($R^2_{\text{ajustado}} = 0,928$), mas evidenciou multicolinearidade severa entre `Enroll` e
+`F.Undergrad`. Entre as quatro especificações comparadas, apenas o Stepwise (BIC) elimina essa
+multicolinearidade, com perda desprezível de ajuste ($R^2_{\text{ajustado}} = 0,927$), sendo
+adotado como modelo final com dez preditores: `Accept`, `Enroll`, `Top10perc`, `Top25perc`,
+`Outstate`, `Room.Board`, `PhD`, `Expend`, `Grad.Rate` e `Private_Yes`. A validação cruzada
+confirmou boa generalização ($R^2$ médio de 0,911), e a interpretação dos coeficientes apontou
+`Accept`, `Top10perc` e a condição de instituição privada como os fatores de maior efeito
+prático, além de ilustrar como a correlação entre preditores pode inverter o sinal de
+coeficientes parciais (`Enroll`, `Top25perc`, `PhD`).
 
-A validação cruzada K-Fold confirmou a capacidade de generalização do modelo final, com $R^2$
-médio de 0,911 nas partições de teste, próximo do $R^2_{\text{ajustado}}$ obtido dentro da
-amostra de ajuste. A interpretação dos coeficientes indicou `Accept`, `Top10perc` e a condição de
-instituição privada como os fatores de maior efeito prático sobre `Apps`, ao passo que `Enroll`,
-`Top25perc` e `PhD` apresentaram coeficientes parciais de sinal oposto ao da correlação
-bivariada, ilustrando o efeito da correlação entre preditores sobre a leitura de coeficientes em
-modelos multivariados.
+O diagnóstico revelou violação de homocedasticidade (Breusch-Pagan) e de normalidade dos
+resíduos (Shapiro-Wilk e envelope simulado), associada a um pequeno grupo de observações
+influentes — sobretudo a observação 484 —, que concentra alta alavancagem, resíduo atípico e
+distância de Cook elevada. Ainda assim, as previsões para perfis públicos e privados típicos
+reproduziram, de forma quantitativa, a diferença de demanda já sugerida na análise exploratória,
+evidenciando a utilidade prática do modelo apesar das limitações diagnosticadas.
 
-O diagnóstico do modelo indicou violação de dois pressupostos clássicos do MRLM:
-heterocedasticidade, confirmada pelo teste de Breusch-Pagan, e não normalidade dos resíduos,
-confirmada pelo teste de Shapiro-Wilk e pelo gráfico de envelope simulado. A investigação de
-observações influentes apontou um pequeno grupo de instituições — em especial a observação 484,
-com 48.094 candidaturas — que concentra simultaneamente alta alavancagem, resíduo atípico e
-distância de Cook elevada, e que está diretamente associada às violações de homocedasticidade e
-normalidade identificadas. Por fim, as previsões para perfis institucionais públicos e privados
-típicos reproduziram, de forma quantitativa, a diferença de demanda entre os dois grupos já
-sugerida na análise exploratória, evidenciando a utilidade prática do modelo apesar das
-limitações diagnosticadas.
-
-Em síntese, o número de candidaturas recebidas por uma instituição de ensino superior está
-fortemente associado a características ligadas ao processo de admissão, à seletividade
-acadêmica, ao custo, ao investimento institucional e à natureza pública ou privada da
-instituição. O modelo final oferece uma descrição parcimoniosa e razoavelmente estável dessas
-associações, mas suas limitações de heterocedasticidade e normalidade — decorrentes, em grande
-parte, da forte assimetria de `Apps` e de um pequeno número de observações extremas e influentes
-— indicam que extensões futuras, como a modelagem em escala transformada (por exemplo,
-logarítmica) ou o uso de erros-padrão robustos, poderiam aprimorar a precisão inferencial sem
-alterar as principais conclusões substantivas aqui obtidas.
+Em síntese, o número de candidaturas está fortemente associado ao processo de admissão, à
+seletividade acadêmica, ao custo, ao investimento institucional e à natureza pública ou privada
+da instituição. O modelo final oferece uma descrição parcimoniosa e razoavelmente estável dessas
+associações; suas limitações de heterocedasticidade e normalidade, decorrentes da forte
+assimetria de `Apps` e de observações extremas, sugerem que extensões futuras — como modelagem
+em escala logarítmica ou erros-padrão robustos — poderiam aprimorar a precisão inferencial sem
+alterar as conclusões substantivas aqui obtidas.
