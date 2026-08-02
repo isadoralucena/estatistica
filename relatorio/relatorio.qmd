@@ -807,29 +807,588 @@ pressupostos e a realização das previsões.
 
 # Validação cruzada K-Fold
 
-Esta seção avaliará o desempenho preditivo e a estabilidade do modelo selecionado.
+```{python}
+#| label: modelo-final-setup
+#| include: false
+modelo_final = modelo_bic
+variaveis_finais = variaveis_bic
+X_final = sm.add_constant(dados_modelo[variaveis_finais], has_constant="add")
+y_final = dados_modelo[variavel_resposta]
+n_final = X_final.shape[0]
+p_final = X_final.shape[1]
+```
+
+Para avaliar a capacidade preditiva do modelo final fora da amostra utilizada em seu ajuste,
+foi realizada uma validação cruzada K-Fold com $K=10$ partições, aplicada exclusivamente ao
+modelo Stepwise (BIC). Em cada iteração, o modelo foi reajustado com nove das dez partições e
+avaliado na partição restante, sendo calculados a raiz do erro quadrático médio (RMSE), o erro
+absoluto médio (MAE) e o coeficiente de determinação ($R^2$) na partição de teste.
+
+```{python}
+#| label: tbl-kfold
+#| tbl-cap: "Métricas de validação cruzada K-Fold (K = 10) para o modelo final."
+
+from sklearn.model_selection import KFold
+
+kf = KFold(n_splits=10, shuffle=True, random_state=42)
+
+metricas_fold = []
+for fold, (idx_treino, idx_teste) in enumerate(kf.split(dados_modelo), start=1):
+    X_treino = sm.add_constant(
+        dados_modelo[variaveis_finais].iloc[idx_treino], has_constant="add"
+    )
+    y_treino = y_final.iloc[idx_treino]
+    X_teste = sm.add_constant(
+        dados_modelo[variaveis_finais].iloc[idx_teste], has_constant="add"
+    )
+    y_teste = y_final.iloc[idx_teste]
+
+    modelo_fold = sm.OLS(y_treino, X_treino).fit()
+    predito = modelo_fold.predict(X_teste)
+    residuo = y_teste - predito
+
+    rmse = np.sqrt(np.mean(residuo ** 2))
+    mae = np.mean(np.abs(residuo))
+    sqt = np.sum((y_teste - y_teste.mean()) ** 2)
+    r2 = 1 - np.sum(residuo ** 2) / sqt
+
+    metricas_fold.append({"Partição": fold, "RMSE": rmse, "MAE": mae, "R2": r2})
+
+kfold_resultado = pd.DataFrame(metricas_fold)
+kfold_resumo = pd.concat([
+    kfold_resultado,
+    pd.DataFrame([{
+        "Partição": "Média",
+        "RMSE": kfold_resultado["RMSE"].mean(),
+        "MAE": kfold_resultado["MAE"].mean(),
+        "R2": kfold_resultado["R2"].mean(),
+    }]),
+    pd.DataFrame([{
+        "Partição": "Desvio-padrão",
+        "RMSE": kfold_resultado["RMSE"].std(),
+        "MAE": kfold_resultado["MAE"].std(),
+        "R2": kfold_resultado["R2"].std(),
+    }]),
+], ignore_index=True)
+kfold_resumo = kfold_resumo.rename(columns={"R2": "$R^2$"})
+for coluna in ["RMSE", "MAE", "$R^2$"]:
+    kfold_resumo[coluna] = kfold_resumo[coluna].map(lambda x: numero_br(x, 3))
+tabela(kfold_resumo)
+```
+
+A @tbl-kfold mostra que o RMSE médio nas dez partições de teste é de aproximadamente
+$1.086,47$ candidaturas, com desvio-padrão de $331,36$, enquanto o $R^2$ médio é de $0,911$,
+com desvio-padrão de $0,034$. Esses valores são próximos dos obtidos dentro da própria amostra
+de ajuste, na qual o modelo final apresenta $R^2_{\text{ajustado}} = 0,927$ e RMSE de
+aproximadamente $1.042,99$. A proximidade entre o desempenho estimado por validação cruzada e
+o desempenho dentro da amostra indica que o modelo generaliza razoavelmente bem para dados não
+utilizados em seu ajuste, sem sinais de sobreajuste severo.
+
+Observa-se, ainda, alguma variabilidade entre partições: a partição 5 apresenta o maior RMSE
+($1.641,29$), o que é consistente com o fato de essa partição conter, no conjunto de teste, a
+observação 484, identificada desde a análise exploratória (@tbl-extremos) como a instituição
+com o maior número de candidaturas da base (48.094). Já a partição 3 apresenta o menor $R^2$
+($0,830$), refletindo a sensibilidade do modelo à composição de cada partição em uma base com
+forte assimetria na variável resposta. Essa oscilação motiva a investigação mais detalhada de
+observações influentes, retomada na seção de diagnóstico.
 
 # Interpretação dos coeficientes
 
-Esta seção interpretará os coeficientes do modelo final no contexto das características
-institucionais.
+A @tbl-coef-final apresenta as estimativas dos coeficientes do modelo final (Stepwise BIC),
+com os respectivos erros-padrão, estatísticas de teste e intervalos de confiança de 95%.
+
+```{python}
+#| label: tbl-coef-final
+#| tbl-cap: "Estimativas do modelo final (Stepwise BIC)."
+ic_final = modelo_final.conf_int()
+coeficientes_finais = pd.DataFrame({
+    "Termo": modelo_final.params.index,
+    "Estimativa": modelo_final.params.values,
+    "Erro padrão": modelo_final.bse.values,
+    "Estatística t": modelo_final.tvalues.values,
+    "p-valor": modelo_final.pvalues.values,
+    "Limite inferior": ic_final[0].values,
+    "Limite superior": ic_final[1].values,
+})
+coeficientes_finais["Termo"] = coeficientes_finais["Termo"].replace({
+    "const": "Intercepto",
+    "Private_Yes": "Privada (Yes versus No)",
+})
+for coluna in ["Estimativa", "Erro padrão", "Estatística t",
+               "Limite inferior", "Limite superior"]:
+    coeficientes_finais[coluna] = coeficientes_finais[coluna].map(
+        lambda x: numero_br(x, 3)
+    )
+coeficientes_finais["p-valor"] = modelo_final.pvalues.values
+coeficientes_finais["p-valor"] = coeficientes_finais["p-valor"].map(pvalor_br)
+tabela(coeficientes_finais)
+```
+
+Todos os dez preditores do modelo final apresentam coeficientes estatisticamente significativos
+ao nível de 5%, o que já era esperado, uma vez que o critério BIC penaliza fortemente variáveis
+com pouca contribuição marginal. O $R^2_{\text{ajustado}}$ de 0,927 indica que o modelo explica
+92,7% da variação amostral de `Apps` com praticamente a mesma capacidade explicativa do modelo
+completo, porém com sete preditores a menos.
+
+`Accept` é o preditor de maior efeito prático: mantidos os demais preditores constantes, cada
+candidatura aceita adicional está associada, em média, a um acréscimo de aproximadamente 1,58
+candidatura recebida, refletindo a forte relação estrutural entre aceitação e demanda observada
+desde a análise de correlação ($r = 0,94$ entre `Apps` e `Accept`). O percentual de ingressantes
+no top 10% da turma (`Top10perc`) também apresenta associação positiva expressiva: cada ponto
+percentual adicional está associado a cerca de 49 candidaturas a mais, consistente com a leitura
+de que instituições mais seletivas e prestigiadas atraem maior número de candidatos. Na mesma
+direção, `Room.Board` e `Expend` apresentam coeficientes positivos, sugerindo que maiores
+investimentos em infraestrutura de moradia/alimentação e gasto institucional por aluno estão
+associados a maior atratividade. `Grad.Rate` também contribui positivamente, compatível com a
+ideia de que taxas de graduação mais altas sinalizam melhor desempenho institucional.
+
+Outros coeficientes têm sinal negativo e mensagem mais sutil. `Outstate` é negativo, indicando
+que, mantidos os demais fatores constantes, mensalidades mais altas para estudantes de fora do
+estado estão associadas a menor número de candidaturas — um efeito de custo, coerente com a
+intuição econômica. O coeficiente de `Private_Yes` reforça o resultado já observado no modelo
+inicial: instituições privadas recebem, em média, cerca de 575 candidaturas a menos que
+instituições públicas com as demais características equivalentes, o que é coerente com a
+diferença de porte entre os dois grupos discutida na análise exploratória (@tbl-resumo-private).
+
+Três coeficientes merecem leitura mais cuidadosa por apresentarem sinal oposto ao da correlação
+bivariada com `Apps` observada na @fig-correlacao (seção de correlação e multicolinearidade):
+`Enroll`, `Top25perc` e `PhD` são positivamente correlacionados com `Apps` isoladamente
+($r = 0,85$; $r = 0,35$; e $r = 0,39$, respectivamente), mas seus coeficientes parciais no
+modelo final são negativos. Esse padrão é uma consequência esperada da correlação entre
+preditores: `Enroll` está fortemente associado a `Accept` ($r = 0,91$), `Top25perc` está
+fortemente associado a `Top10perc` ($r = 0,89$) e `PhD` está associado a `Terminal` e a outras
+variáveis de perfil acadêmico. Uma vez que `Accept` e `Top10perc` já capturam grande parte da
+variação relacionada à demanda e à seletividade, os coeficientes de `Enroll`, `Top25perc` e
+`PhD` passam a representar o efeito marginal residual dessas variáveis, condicional às demais —
+e não devem ser interpretados como relações de causa e efeito isoladas, mas sim como associações
+parciais dentro do conjunto de preditores do modelo.
 
 # Diagnóstico do modelo
 
-Esta seção verificará a adequação do modelo selecionado aos pressupostos da regressão linear.
+Esta seção avalia a adequação do modelo final aos pressupostos clássicos da regressão linear:
+linearidade, homocedasticidade (variância constante dos erros) e independência dos resíduos. A
+normalidade dos resíduos é tratada separadamente na próxima seção.
+
+```{python}
+#| label: fig-diagnostico-residuos
+#| fig-cap: "Resíduos versus valores ajustados e gráfico de escala-localização do modelo final."
+#| fig-width: 6.2
+#| fig-height: 3.0
+from statsmodels.stats.outliers_influence import OLSInfluence
+from scipy import stats
+
+residuos_final = modelo_final.resid
+ajustados_final = modelo_final.fittedvalues
+influencia_final = OLSInfluence(modelo_final)
+residuos_padronizados = influencia_final.resid_studentized_internal
+
+fig, axes = plt.subplots(1, 2, figsize=(6.2, 3.0))
+
+axes[0].scatter(ajustados_final, residuos_final, s=10, alpha=0.45, color="#4C78A8")
+axes[0].axhline(0, color="#E45756", linewidth=1.0, linestyle="--")
+axes[0].set_title("Resíduos vs. ajustados")
+axes[0].set_xlabel("Valores ajustados")
+axes[0].set_ylabel("Resíduos")
+
+axes[1].scatter(
+    ajustados_final, np.sqrt(np.abs(residuos_padronizados)),
+    s=10, alpha=0.45, color="#72B7B2"
+)
+axes[1].set_title("Escala-localização")
+axes[1].set_xlabel("Valores ajustados")
+axes[1].set_ylabel(r"$\sqrt{|\mathrm{resíduo\ padronizado}|}$")
+
+for ax in axes:
+    estilo_eixo(ax)
+fig.tight_layout()
+plt.show()
+```
+
+```{python}
+#| label: tbl-breusch-pagan
+#| tbl-cap: "Teste de Breusch-Pagan para heterocedasticidade."
+from statsmodels.stats.diagnostic import het_breuschpagan
+
+bp_stat, bp_pvalor, bp_f, bp_f_pvalor = het_breuschpagan(residuos_final, X_final)
+bp_tabela = pd.DataFrame([{
+    "Estatística LM": numero_br(bp_stat, 3),
+    "p-valor (LM)": pvalor_br(bp_pvalor),
+    "Estatística F": numero_br(bp_f, 3),
+    "p-valor (F)": pvalor_br(bp_f_pvalor),
+}])
+tabela(bp_tabela)
+```
+
+A @fig-diagnostico-residuos evidencia um padrão de leque (*funnel shape*) no gráfico de
+resíduos versus valores ajustados: a dispersão dos resíduos aumenta com o valor previsto de
+`Apps`, sugerindo variância não constante. O gráfico de escala-localização confirma essa
+tendência, com a magnitude dos resíduos padronizados crescendo à medida que os valores ajustados
+aumentam. O teste formal de Breusch-Pagan (@tbl-breusch-pagan) rejeita a hipótese nula de
+homocedasticidade a qualquer nível usual de significância, confirmando estatisticamente a
+heterocedasticidade sugerida pelos gráficos.
+
+Esse resultado é esperado dado o forte caráter assimétrico de `Apps`, já identificado na análise
+exploratória (assimetria amostral de 3,72; @fig-distribuicao-apps): instituições com maior
+volume de candidaturas tendem a apresentar também maior variabilidade absoluta nesse volume. A
+heterocedasticidade não invalida as estimativas pontuais dos coeficientes, que permanecem não
+viesadas, mas compromete a eficiência dos erros-padrão clássicos e, por consequência, a precisão
+exata dos testes de hipótese e dos intervalos construídos na seção de previsões, que devem ser
+interpretados com essa ressalva.
+
+Em conjunto, os diagnósticos indicam que o modelo atende razoavelmente aos pressupostos da regressão linear múltipla. 
+Embora existam pequenas violações, principalmente relacionadas à normalidade dos resíduos nas caudas, elas não comprometem 
+significativamente as inferências devido ao tamanho da amostra.
 
 # QQ Plot e normalidade dos resíduos
 
-Esta seção avaliará graficamente a normalidade dos resíduos do modelo.
+```{python}
+#| label: fig-qqplot
+#| fig-cap: "QQ-plot dos resíduos estudentizados do modelo final."
+#| fig-width: 4.4
+#| fig-height: 4.0
+residuos_estudentizados = influencia_final.resid_studentized_external
+
+fig, ax = plt.subplots(figsize=(4.4, 4.0))
+stats.probplot(residuos_estudentizados, dist="norm", plot=ax)
+ax.get_lines()[0].set_markerfacecolor("#4C78A8")
+ax.get_lines()[0].set_markeredgecolor("#4C78A8")
+ax.get_lines()[0].set_markersize(3.4)
+ax.get_lines()[0].set_alpha(0.6)
+ax.get_lines()[1].set_color("#E45756")
+ax.set_title("QQ-plot dos resíduos estudentizados")
+ax.set_xlabel("Quantis teóricos (normal)")
+ax.set_ylabel("Resíduos estudentizados")
+estilo_eixo(ax)
+fig.tight_layout()
+plt.show()
+```
+
+O QQ-plot mostra afastamento sistemático da reta de referência normal nas duas caudas,
+sobretudo na cauda superior, onde os resíduos observados assumem valores muito mais extremos do
+que o esperado sob normalidade — reflexo direto de instituições com candidaturas atipicamente
+elevadas, como a observação 484.
+
+Para complementar a avaliação visual, foi construído um gráfico de envelope simulado: a partir
+do modelo ajustado, foram geradas 100 réplicas da variável resposta sob a hipótese de erros
+normais com a mesma matriz de preditores, obtendo-se, para cada posição ordenada dos resíduos
+estudentizados, uma banda de referência entre os percentis 2,5% e 97,5% das réplicas simuladas.
+
+```{python}
+#| label: fig-envelope
+#| fig-cap: "Gráfico de envelope simulado dos resíduos estudentizados do modelo final."
+#| fig-width: 4.6
+#| fig-height: 4.2
+np.random.seed(123)
+
+Q_final, _ = np.linalg.qr(X_final.values)
+leverage_final = np.sum(Q_final ** 2, axis=1)
+sigma_final = np.sqrt(modelo_final.mse_resid)
+ajustados_vetor = ajustados_final.values
+
+B_simulacoes = 100
+Y_simulado = (
+    ajustados_vetor[:, None]
+    + sigma_final * np.random.normal(size=(n_final, B_simulacoes))
+)
+ajustados_simulados = Q_final @ (Q_final.T @ Y_simulado)
+residuos_simulados = Y_simulado - ajustados_simulados
+sigma2_simulado = np.sum(residuos_simulados ** 2, axis=0) / (n_final - p_final)
+estudentizado_simulado = (
+    residuos_simulados
+    / (np.sqrt(sigma2_simulado)[None, :] * np.sqrt(1 - leverage_final)[:, None])
+)
+estudentizado_simulado_ordenado = np.sort(estudentizado_simulado, axis=0)
+
+envelope_inferior = np.percentile(estudentizado_simulado_ordenado, 2.5, axis=1)
+envelope_superior = np.percentile(estudentizado_simulado_ordenado, 97.5, axis=1)
+envelope_mediana = np.percentile(estudentizado_simulado_ordenado, 50, axis=1)
+
+residuos_ordenados = np.sort(residuos_estudentizados)
+quantis_teoricos = stats.norm.ppf(
+    (np.arange(1, n_final + 1) - 0.375) / (n_final + 0.25)
+)
+
+fora_envelope = int(
+    np.sum((residuos_ordenados < envelope_inferior)
+           | (residuos_ordenados > envelope_superior))
+)
+
+fig, ax = plt.subplots(figsize=(4.6, 4.2))
+ax.fill_between(
+    quantis_teoricos, envelope_inferior, envelope_superior,
+    color="#B7C7DB", alpha=0.55, label="Envelope simulado (95%)"
+)
+ax.plot(quantis_teoricos, envelope_mediana, color="#4C78A8", linewidth=0.9,
+        linestyle="--", label="Mediana simulada")
+ax.scatter(quantis_teoricos, residuos_ordenados, s=9, color="#E45756",
+           alpha=0.6, label="Resíduos observados")
+ax.set_title("Envelope simulado dos resíduos")
+ax.set_xlabel("Quantis teóricos (normal)")
+ax.set_ylabel("Resíduos estudentizados ordenados")
+ax.legend(fontsize=7, frameon=False, loc="upper left")
+estilo_eixo(ax)
+fig.tight_layout()
+plt.show()
+```
+
+```{python}
+#| label: tbl-shapiro
+#| tbl-cap: "Estatísticas de normalidade dos resíduos do modelo final."
+shapiro_estat, shapiro_p = stats.shapiro(residuos_final)
+normalidade_tabela = pd.DataFrame([{
+    "Estatística de Shapiro-Wilk": numero_br(shapiro_estat, 3),
+    "p-valor": pvalor_br(shapiro_p),
+    "Assimetria dos resíduos": numero_br(stats.skew(residuos_final), 2),
+    "Curtose dos resíduos": numero_br(stats.kurtosis(residuos_final), 2),
+    "% fora do envelope": numero_br(100 * fora_envelope / n_final, 1),
+}])
+tabela(normalidade_tabela)
+```
+
+A @tbl-shapiro resume a avaliação formal de normalidade. O teste de Shapiro-Wilk rejeita a
+hipótese de normalidade dos resíduos ($p < 0,001$), e as medidas de assimetria (2,36) e curtose
+(15,98) indicam uma distribuição fortemente assimétrica à direita e com caudas muito mais pesadas
+que as da distribuição normal. O gráfico de envelope simulado (@fig-envelope) corrobora essa
+conclusão de forma visual: a maior parte dos resíduos observados situa-se fora da banda de 95%
+esperada sob normalidade, sobretudo por estarem mais concentrados próximo de zero do que o
+previsto pelo modelo normal e por apresentarem valores extremos nas caudas muito além do
+envelope — configuração típica de distribuições leptocúrticas.
+
+Em conjunto, os resultados desta seção e da anterior indicam que dois pressupostos clássicos do
+MRLM — homocedasticidade e normalidade dos resíduos — não são plenamente satisfeitos pelo modelo
+final. Essa violação está associada principalmente à forte assimetria de `Apps` e a um pequeno
+número de observações extremas, investigadas formalmente na próxima seção. Como o escopo deste
+trabalho é a comparação e o diagnóstico dos modelos já ajustados, e não a proposição de uma nova
+especificação, o modelo Stepwise (BIC) é mantido como modelo final; a violação identificada é
+registrada como limitação a ser considerada na leitura de testes de hipótese e intervalos.
 
 # Pontos atípicos, de alavanca e influentes
 
-Esta seção investigará observações atípicas, de alavanca e influentes.
+Esta seção identifica observações atípicas (*outliers*), de alavanca (*leverage*) e influentes
+no modelo final, utilizando três medidas complementares: resíduos estudentizados
+(externamente), alavancagem ($h_{ii}$, diagonal da matriz de projeção) e distância de Cook.
+Como referência, foram adotados os limites usuais $|\text{resíduo estudentizado}| > 3$ para
+pontos atípicos, $h_{ii} > 2p/n$ para pontos de alavanca e $D_i > 4/n$ para pontos influentes,
+em que $p$ é o número de parâmetros do modelo (incluindo o intercepto) e $n$ o número de
+observações.
+
+```{python}
+#| label: fig-influencia
+#| fig-cap: "Distância de Cook e gráfico de influência (alavanca versus resíduo estudentizado) do modelo final."
+#| fig-width: 6.2
+#| fig-height: 3.0
+alavancagem = influencia_final.hat_matrix_diag
+cooks_d = influencia_final.cooks_distance[0]
+
+limite_alavancagem = 2 * p_final / n_final
+limite_cook = 4 / n_final
+limite_residuo = 3
+
+fig, axes = plt.subplots(1, 2, figsize=(6.2, 3.0))
+
+axes[0].vlines(
+    dados_modelo.index, 0, cooks_d, color="#4C78A8", linewidth=0.7, alpha=0.7
+)
+axes[0].axhline(limite_cook, color="#E45756", linestyle="--", linewidth=1.0)
+axes[0].set_title("Distância de Cook")
+axes[0].set_xlabel("Observação")
+axes[0].set_ylabel("Distância de Cook")
+
+tamanho_pontos = 8 + 400 * (cooks_d / cooks_d.max())
+axes[1].scatter(
+    alavancagem, residuos_estudentizados, s=tamanho_pontos,
+    alpha=0.45, color="#72B7B2", edgecolor="#2E5266", linewidth=0.3
+)
+axes[1].axvline(limite_alavancagem, color="#E45756", linestyle="--", linewidth=1.0)
+axes[1].axhline(limite_residuo, color="#E45756", linestyle="--", linewidth=1.0)
+axes[1].axhline(-limite_residuo, color="#E45756", linestyle="--", linewidth=1.0)
+axes[1].set_title("Alavanca vs. resíduo estudentizado")
+axes[1].set_xlabel("Alavancagem ($h_{ii}$)")
+axes[1].set_ylabel("Resíduo estudentizado")
+
+for ax in axes:
+    estilo_eixo(ax)
+fig.tight_layout()
+plt.show()
+```
+
+```{python}
+#| label: tbl-influencia
+#| tbl-cap: "Observações que excedem simultaneamente os três critérios de alavanca, atipicidade e influência."
+diagnostico_influencia = pd.DataFrame({
+    "Observação": dados_modelo.index.to_numpy(),
+    "Alavancagem": alavancagem,
+    "Resíduo estudentizado": residuos_estudentizados,
+    "Distância de Cook": cooks_d,
+}).reset_index(drop=True)
+sinaliza_alavanca = diagnostico_influencia["Alavancagem"] > limite_alavancagem
+sinaliza_cook = diagnostico_influencia["Distância de Cook"] > limite_cook
+sinaliza_atipico = diagnostico_influencia["Resíduo estudentizado"].abs() > limite_residuo
+sinaliza_todos = sinaliza_alavanca & sinaliza_cook & sinaliza_atipico
+
+tabela_influentes = (
+    diagnostico_influencia.loc[sinaliza_todos]
+    .merge(
+        dados[["Private", "Apps"]].reset_index(),
+        on="Observação", how="left",
+    )
+    .assign(Private=lambda d: d["Private"].astype(str).map(ROTULOS_PRIVATE))
+    .sort_values("Distância de Cook", ascending=False)
+    .rename(columns={"Private": "Instituição"})
+    [["Observação", "Instituição", "Apps", "Alavancagem",
+      "Resíduo estudentizado", "Distância de Cook"]]
+)
+for coluna in ["Alavancagem", "Resíduo estudentizado", "Distância de Cook"]:
+    tabela_influentes[coluna] = tabela_influentes[coluna].map(lambda x: numero_br(x, 3))
+tabela(tabela_influentes)
+```
+
+Com os limites de referência adotados, 48 observações excedem o limite de alavancagem, 46
+excedem o limite da distância de Cook e 18 são classificadas como atípicas pelo resíduo
+estudentizado. Esses números, relativamente altos para uma base com 777 observações,
+são esperados quando se aplicam limites de referência clássicos a uma amostra grande com
+resposta fortemente assimétrica; nem todas essas observações representam, necessariamente,
+problemas de ajuste isolados.
+
+Uma leitura mais seletiva considera as observações que excedem simultaneamente os três
+critérios, listadas na @tbl-influencia: apenas 10 instituições atendem a essa condição mais
+restritiva, o que corresponde a cerca de 1,3% da amostra. Entre elas, destaca-se novamente a
+observação 484 — a instituição pública com 48.094 candidaturas já identificada na
+@tbl-extremos —, cuja alavancagem (0,364) é mais de doze vezes o limite de referência
+($2p/n = 0,028$), cuja distância de Cook (4,63) supera em larga margem tanto o limite de
+referência ($4/n = 0,005$) quanto o limite absoluto tradicional igual a 1, e cujo resíduo
+estudentizado (10,03) é, de longe, o mais extremo da base. Essa observação concentra, portanto,
+alavanca, atipicidade e influência de forma simultânea, sendo o ponto isolado de maior impacto
+potencial sobre as estimativas do modelo final.
+
+Como a proposta deste trabalho é diagnosticar o modelo final já selecionado, e não reajustá-lo,
+nenhuma observação foi removida ou teve tratamento diferenciado nas seções anteriores. O
+registro dessas observações tem caráter diagnóstico: evidencia que uma parcela pequena, porém
+não desprezível, da amostra — sobretudo instituições públicas de grande porte com volume de
+candidaturas muito acima da média — tem peso desproporcional sobre o ajuste, o que é coerente
+com a heterocedasticidade e a não normalidade identificadas nas seções anteriores.
 
 # Previsões
 
-Esta seção apresentará previsões e respectivos intervalos para perfis plausíveis de instituições.
+Esta seção ilustra o uso prático do modelo final por meio de dois perfis institucionais
+plausíveis, construídos a partir das medianas observadas dos dez preditores do modelo, separadas
+por natureza da instituição (pública ou privada). Para cada perfil, são apresentados a previsão
+pontual, o intervalo de confiança de 95% para o valor médio esperado da resposta,
+$E(Y \mid \mathbf{X} = \mathbf{x}_0)$, e o intervalo de predição de 95% para uma nova observação
+individual.
+
+```{python}
+#| label: tbl-perfis
+#| tbl-cap: "Perfis institucionais utilizados nas previsões, com base nas medianas por natureza da instituição."
+publicas_modelo = dados_modelo.loc[dados_modelo["Private_Yes"] == 0, variaveis_finais]
+privadas_modelo = dados_modelo.loc[dados_modelo["Private_Yes"] == 1, variaveis_finais]
+
+perfil_publica = publicas_modelo.median()
+perfil_privada = privadas_modelo.median()
+
+perfis = pd.DataFrame(
+    [perfil_publica, perfil_privada],
+    index=["Pública (mediana)", "Privada (mediana)"],
+)[variaveis_finais]
+
+perfis_exibicao = perfis.reset_index().rename(columns={"index": "Perfil"})
+for coluna in variaveis_finais:
+    perfis_exibicao[coluna] = perfis_exibicao[coluna].map(lambda x: numero_br(x, 1))
+tabela(perfis_exibicao)
+```
+
+```{python}
+#| label: tbl-previsoes
+#| tbl-cap: "Previsão pontual, intervalo de confiança para a média e intervalo de predição (95%) para os dois perfis institucionais."
+X_perfis = sm.add_constant(perfis, has_constant="add")
+X_perfis = X_perfis[X_final.columns]
+
+previsao_perfis = modelo_final.get_prediction(X_perfis)
+resumo_previsao = previsao_perfis.summary_frame(alpha=0.05)
+resumo_previsao.index = ["Pública (mediana)", "Privada (mediana)"]
+
+previsoes_exibicao = resumo_previsao.reset_index().rename(columns={
+    "index": "Perfil",
+    "mean": "Previsão pontual",
+    "mean_ci_lower": "IC 95% (inferior)",
+    "mean_ci_upper": "IC 95% (superior)",
+    "obs_ci_lower": "IP 95% (inferior)",
+    "obs_ci_upper": "IP 95% (superior)",
+})[[
+    "Perfil", "Previsão pontual", "IC 95% (inferior)", "IC 95% (superior)",
+    "IP 95% (inferior)", "IP 95% (superior)",
+]]
+for coluna in previsoes_exibicao.columns[1:]:
+    previsoes_exibicao[coluna] = previsoes_exibicao[coluna].map(lambda x: numero_br(x, 1))
+tabela(previsoes_exibicao)
+```
+
+O perfil de instituição **pública** típica (mediana das públicas nos dez preditores do modelo)
+resulta em uma previsão pontual de aproximadamente **4.102** candidaturas, com intervalo de
+confiança de 95% para o número médio esperado de candidaturas entre **3.953,6** e **4.250,6**, e
+intervalo de predição de 95% entre **2.049,3** e **6.154,9** para uma nova instituição com esse
+mesmo perfil. Já o perfil de instituição **privada** típica resulta em uma previsão pontual de
+aproximadamente **1.053** candidaturas, com intervalo de confiança de 95% entre **957,1** e
+**1.148,9**, e intervalo de predição de 95% entre **-996,7** e **3.102,7**.
+
+Como esperado pela teoria da regressão, o intervalo de predição é substancialmente mais largo
+que o intervalo de confiança em ambos os perfis, pois incorpora tanto a incerteza sobre o valor
+médio quanto a variabilidade individual em torno desse valor. No perfil privado, o limite
+inferior do intervalo de predição é negativo, o que não tem significado prático, já que `Apps`
+não pode ser negativo: esse resultado é uma consequência esperada de ajustar um modelo linear
+não transformado a uma variável de contagem fortemente assimétrica e heterocedástica, como
+discutido nas seções de diagnóstico. Na prática, esse limite deve ser interpretado como
+equivalente a zero candidaturas, e o intervalo de predição deve ser lido com cautela adicional,
+sobretudo para instituições privadas de menor porte.
+
+Ainda assim, os dois perfis reproduzem, de forma coerente, o padrão já descrito na análise
+exploratória (@tbl-resumo-private): instituições públicas recebem, em mediana, número de
+candidaturas várias vezes maior que instituições privadas, mesmo após o controle simultâneo por
+seletividade, custo, perfil acadêmico e investimento institucional promovido pelo modelo de
+regressão múltipla.
 
 # Conclusão
 
-Esta seção sintetizará os principais resultados e retomará a pergunta de pesquisa.
+Este trabalho aplicou a metodologia de Regressão Linear Múltipla para modelar o número de
+candidaturas (`Apps`) recebidas por instituições de ensino superior dos Estados Unidos,
+utilizando a base `College`. A análise exploratória revelou forte assimetria à direita na
+variável resposta e diferenças marcantes entre instituições públicas e privadas, tanto em porte
+quanto em custo e investimento.
+
+O modelo inicial, com os 16 preditores numéricos e a variável categórica `Private`, apresentou
+elevado poder explicativo ($R^2_{\text{ajustado}} = 0,928$), mas evidenciou multicolinearidade
+severa entre `Enroll` e `F.Undergrad` (VIF de 21,37 e 18,02, respectivamente). A comparação entre
+quatro especificações — Completo, Backward, Stepwise (AIC) e Stepwise (BIC) — mostrou que apenas
+o modelo Stepwise (BIC) elimina essa multicolinearidade severa, ao custo de uma perda
+praticamente desprezível de capacidade explicativa ($R^2_{\text{ajustado}} = 0,927$), sendo por
+isso adotado como modelo final com dez preditores: `Accept`, `Enroll`, `Top10perc`, `Top25perc`,
+`Outstate`, `Room.Board`, `PhD`, `Expend`, `Grad.Rate` e `Private_Yes`.
+
+A validação cruzada K-Fold confirmou a capacidade de generalização do modelo final, com $R^2$
+médio de 0,911 nas partições de teste, próximo do $R^2_{\text{ajustado}}$ obtido dentro da
+amostra de ajuste. A interpretação dos coeficientes indicou `Accept`, `Top10perc` e a condição de
+instituição privada como os fatores de maior efeito prático sobre `Apps`, ao passo que `Enroll`,
+`Top25perc` e `PhD` apresentaram coeficientes parciais de sinal oposto ao da correlação
+bivariada, ilustrando o efeito da correlação entre preditores sobre a leitura de coeficientes em
+modelos multivariados.
+
+O diagnóstico do modelo indicou violação de dois pressupostos clássicos do MRLM:
+heterocedasticidade, confirmada pelo teste de Breusch-Pagan, e não normalidade dos resíduos,
+confirmada pelo teste de Shapiro-Wilk e pelo gráfico de envelope simulado. A investigação de
+observações influentes apontou um pequeno grupo de instituições — em especial a observação 484,
+com 48.094 candidaturas — que concentra simultaneamente alta alavancagem, resíduo atípico e
+distância de Cook elevada, e que está diretamente associada às violações de homocedasticidade e
+normalidade identificadas. Por fim, as previsões para perfis institucionais públicos e privados
+típicos reproduziram, de forma quantitativa, a diferença de demanda entre os dois grupos já
+sugerida na análise exploratória, evidenciando a utilidade prática do modelo apesar das
+limitações diagnosticadas.
+
+Em síntese, o número de candidaturas recebidas por uma instituição de ensino superior está
+fortemente associado a características ligadas ao processo de admissão, à seletividade
+acadêmica, ao custo, ao investimento institucional e à natureza pública ou privada da
+instituição. O modelo final oferece uma descrição parcimoniosa e razoavelmente estável dessas
+associações, mas suas limitações de heterocedasticidade e normalidade — decorrentes, em grande
+parte, da forte assimetria de `Apps` e de um pequeno número de observações extremas e influentes
+— indicam que extensões futuras, como a modelagem em escala transformada (por exemplo,
+logarítmica) ou o uso de erros-padrão robustos, poderiam aprimorar a precisão inferencial sem
+alterar as principais conclusões substantivas aqui obtidas.
