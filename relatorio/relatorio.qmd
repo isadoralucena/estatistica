@@ -706,6 +706,105 @@ alcançando $13.067,218$ no BIC e $R^2_{\text{ajustado}} = 0,927$. A perda no co
 de determinação ajustado é inferior a $0,1\%$ em relação ao modelo completo ($0,928$), com 
 a vantagem decisiva de eliminar a variável F.Undergrad, principal fonte de multicolinearidade severa ($\text{VIF} = 18,02$).
 
+## Modelo final selecionado
+
+Para definir o modelo final, além dos critérios de ajuste apresentados
+anteriormente, a multicolinearidade dos modelos selecionados também foi
+reavaliada por meio do Fator de Inflação da Variância (VIF).
+
+```{python}
+#| label: tbl-vif-final
+#| tbl-cap: "Maior valor do Fator de Inflação da Variância (VIF) em cada modelo avaliado."
+
+def tabela_vif(modelo, variaveis, nome):
+    X_vif = add_constant(dados_modelo[variaveis], has_constant="add")
+    vif = pd.DataFrame({
+        "Variável": X_vif.columns,
+        "VIF": [
+            variance_inflation_factor(X_vif.values, i)
+            for i in range(X_vif.shape[1])
+        ],
+    })
+    vif = vif.query("Variável != 'const'").assign(Modelo=nome)
+    return vif
+
+vif_final = pd.concat([
+    tabela_vif(modelo_backward, variaveis_backward, "Backward"),
+    tabela_vif(modelo_aic, variaveis_aic, "Stepwise (AIC)"),
+    tabela_vif(modelo_bic, variaveis_bic, "Stepwise (BIC)"),
+])
+
+vif_final_max = (
+    vif_final.groupby("Modelo")["VIF"]
+    .max()
+    .reindex(["Backward", "Stepwise (AIC)", "Stepwise (BIC)"])
+    .reset_index()
+    .rename(columns={"VIF": "Maior VIF"})
+)
+
+vif_final_max["Maior VIF"] = (
+    vif_final_max["Maior VIF"]
+    .map(lambda x: numero_br(x, 2))
+)
+
+tabela(vif_final_max)
+```
+
+A @tbl-vif-final mostra que os modelos **Backward** e **Stepwise (AIC)**
+mantêm simultaneamente as variáveis `Enroll` e `F.Undergrad`, preservando a
+multicolinearidade severa observada no modelo completo. Em ambos os casos, os
+maiores VIFs permanecem próximos de 21 e 17, respectivamente. Já no modelo
+**Stepwise (BIC)**, a remoção de `F.Undergrad` reduz o maior VIF do conjunto
+(`Enroll`) para aproximadamente **7,6**, valor inferior ao limite de
+referência igual a 10. Embora ainda exista alguma correlação entre as
+variáveis explicativas, a multicolinearidade deixa de ser considerada severa.
+
+Diante desses resultados, o modelo **Stepwise (BIC)** foi escolhido como
+modelo final. Esse modelo possui 10 variáveis explicativas (`Accept`,
+`Enroll`, `Top10perc`, `Top25perc`, `Outstate`, `Room.Board`, `PhD`,
+`Expend`, `Grad.Rate` e `Private_Yes`) e apresentou o melhor equilíbrio entre
+qualidade do ajuste, simplicidade e estabilidade dos coeficientes.
+
+A escolha baseia-se em três fatores principais. Primeiro, o modelo é o mais
+parcimonioso entre os avaliados e apresenta perda praticamente desprezível de
+capacidade explicativa. Seu \(R^2\) ajustado é igual a **0,927**, apenas
+**0,001** inferior ao obtido pelos modelos Completo, Backward e Stepwise
+(AIC), todos com \(R^2\) ajustado igual a **0,928**. Segundo, é o único
+modelo que elimina a multicolinearidade severa identificada no modelo
+inicial, reduzindo todos os VIFs para valores inferiores a 10. Por fim,
+embora seu AIC seja ligeiramente superior ao dos modelos Backward e Stepwise
+(AIC), a diferença é inferior a quatro unidades e considerada pequena. Em
+contrapartida, esse modelo apresenta o menor BIC entre todas as
+especificações avaliadas. Como o BIC penaliza de forma mais intensa a
+inclusão de parâmetros desnecessários, ele favorece modelos mais simples sem
+comprometer a qualidade do ajuste.
+
+Os demais modelos não foram selecionados pelos seguintes motivos. O modelo
+**Completo** mantém todas as 17 variáveis explicativas, incluindo preditores
+sem significância estatística (`Books`, `Personal`, `Terminal`,
+`perc.alumni`, `F.Undergrad` e `P.Undergrad`), além da forte
+multicolinearidade entre `Enroll` e `F.Undergrad`. O modelo **Backward**
+elimina parte dessas variáveis, porém mantém `F.Undergrad`, preservando o
+problema de colinearidade. Já o modelo **Stepwise (AIC)** apresenta o menor
+AIC entre os modelos comparados, mas continua incluindo `F.Undergrad` e
+`P.Undergrad`, tornando o modelo mais complexo sem eliminar a principal fonte
+de instabilidade dos coeficientes.
+
+É importante destacar uma limitação presente em todas as especificações
+avaliadas. As variáveis `Accept` e `Enroll` representam etapas posteriores ao
+recebimento das candidaturas (`Apps`), correspondendo ao número de candidatos
+aceitos e ao número de alunos efetivamente matriculados. Dessa forma, essas
+variáveis não representam características institucionais anteriores ao
+processo de candidatura, limitando uma interpretação estritamente causal do
+modelo. Entretanto, como essa característica está presente em todos os
+modelos comparados, ela não interfere na escolha entre eles e, por isso, não
+foi utilizada como critério de seleção.
+
+Assim, o modelo **Stepwise (BIC)** foi adotado como modelo final deste
+trabalho e será utilizado nas próximas etapas da análise, incluindo a
+validação cruzada, a interpretação dos coeficientes, o diagnóstico dos
+pressupostos e a realização das previsões.
+
 # Validação cruzada K-Fold
 
 Esta seção avaliará o desempenho preditivo e a estabilidade do modelo selecionado.
